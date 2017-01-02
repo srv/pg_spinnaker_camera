@@ -20,7 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
 # website during this build process.
 find_library(Spinnaker_LIBRARIES Spinnaker)
 if(NOT Spinnaker_LIBRARIES)
-  message(STATUS "libflycapture not found in system library path")
+  message(STATUS "libSpinnaker not found in system library path")
   include(cmake/DownloadSpinnaker.cmake)
   download_spinnaker(Spinnaker_LIBRARIES Spinnaker_INCLUDE_DIRS)
   message(STATUS "libSpinnaker library: ${Spinnaker_LIBRARIES}")
@@ -57,10 +57,10 @@ include_directories(
   include
 )
 
-add_executable(stereo_camera_node
+add_executable(pg_stereo_camera
   src/nodes/stereo_camera_node.cpp
   src/stereo_camera.cpp)
-target_link_libraries(stereo_camera_node
+target_link_libraries(pg_stereo_camera
   ${OpenCV_LIBRARIES}
   ${catkin_LIBRARIES}
   ${Spinnaker_LIBRARIES})
@@ -72,4 +72,4 @@ target_link_libraries(binocular_demo
   ${catkin_LIBRARIES}
   ${Spinnaker_LIBRARIES})
 
-add_dependencies(stereo_camera_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(pg_stereo_camera ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
