@@ -9,323 +9,494 @@
 #include <chrono>
 #include <sys/stat.h>
 
-using namespace Spinnaker;
-using namespace Spinnaker::GenApi;
-using namespace Spinnaker::GenICam;
+//using namespace Spinnaker;
+//using namespace Spinnaker::GenApi;
+//using namespace Spinnaker::GenICam;
 
-enum Lines {LINE0, LINE1, LINE2, LINE3};
-enum PixelFormat {MONO8, MONO12_PACKED, MONO16, RGB8, BAYER_RG8, BAYER_RG16};
+enum Lines {
+	LINE0, LINE1, LINE2, LINE3
+};
+enum PixelFormat {
+	MONO8, MONO12_PACKED, MONO16, RGB8, BAYER_RG8, BAYER_RG16
+};
 
-class CameraManager {
+// Nested class to hide from implementation
+class DeviceEventHandler : public Spinnaker::DeviceEvent {
  public:
-  SystemPtr system;
-  CameraList camList;
-  CameraManager() {
-    system = System::GetInstance();
-    camList = system->GetCameras();
-  }
-  ~CameraManager() {
-    camList.Clear();
-    system->ReleaseInstance();
-  }
-  CameraPtr GetCamera(const std::string& serial_number) const {
-    return camList.GetBySerial(serial_number);
-  }
+	DeviceEventHandler() {};
+	~DeviceEventHandler(){};
+	// Once Exposure End Event is detected, the OnDeviceEvent function will be called
+	void OnDeviceEvent(Spinnaker::GenICam::gcstring eventName) {
+		std::cout << "Event " << eventName << std::endl;
+	}
 };
 
 class SpinnakerCamera {
 public:
-  SpinnakerCamera(std::string serialNumber) {
-  	CameraManager manager;
-    cam_ptr_ = manager.GetCamera(serialNumber);
-    cam_ptr_->Init();
-    node_map_ = &cam_ptr_->GetNodeMap();
-  }
-  ~SpinnakerCamera() {
-    cam_ptr_->DeInit();
-  }
+	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler()) {
+		system_ = Spinnaker::System::GetInstance();
+		camList_ = system_->GetCameras();
+		unsigned int numCameras = camList_.GetSize();
+		std::cout << "Number of cameras detected: " << numCameras << std::endl << std::endl;
+		cam_ptr_ = camList_.GetBySerial(serial_number);
+		if (cam_ptr_) {
+			cam_ptr_->Init();
+			node_map_ = &cam_ptr_->GetNodeMap();
+		} else {
+			std::cout << "FAILED to open camera " << serial_number << ". Is it connected?" << std::endl;
+		}
+	}
 
-  // Print Device Info
-  void PrintDeviceInfo() {
-    INodeMap &device_node_map = cam_ptr_->GetTLDeviceNodeMap();
-    FeatureList_t features;
-    CCategoryPtr category = device_node_map.GetNode("DeviceInformation");
-    if (IsAvailable(category) && IsReadable(category)) {
-      category->GetFeatures(features);
-      for (auto it = features.begin(); it != features.end(); ++it) {
-        CNodePtr feature_node = *it;
-        std::cout << feature_node->GetName() << " : ";
-        CValuePtr value_ptr = (CValuePtr)feature_node;
-        std::cout << (IsReadable(value_ptr) ? value_ptr->ToString() : "Node not readable");
-        std::cout << std::endl;
-      }
-    } else {
-      std::cout << "Device control information not available." << std::endl;
-    }
-  }
+	~SpinnakerCamera() {
+		camList_.Clear();
+		cam_ptr_->UnregisterEvent(*event_handler_);
+		// Delete device event (because it is a pointer)
+		delete event_handler_;
+		if (cam_ptr_) cam_ptr_->DeInit();
+		system_->ReleaseInstance();
+	}
 
-  // Start/End camera
-  void Start() {
-    cam_ptr_->AcquisitionMode.SetValue(AcquisitionModeEnums::AcquisitionMode_Continuous);
-    cam_ptr_->BeginAcquisition();
-  }
-  void End() {
-    cam_ptr_->EndAcquisition();
-  }
+	bool IsConnected() {
+		if (cam_ptr_) return true;
+		else return false;
+	}
 
-  void SetPixelFormat(int format = BAYER_RG8) {
-  	switch (format) {
-  		case MONO8:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_Mono8);
-  			break;
-  		case MONO12_PACKED:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_Mono12Packed);
-  			break;
-  		case MONO16:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_Mono16);
-  			break;
-  		case RGB8:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_RGB8);
-  			break;
-  		case BAYER_RG8:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_BayerRG8);
-  			break;
-  		case BAYER_RG16:
-  			cam_ptr_->PixelFormat.SetValue(PixelFormatEnums::PixelFormat_BayerRG16);
-  			break;
-  	}
-  }
+	// Print Device Info
+	void PrintDeviceInfo() {
+		if (!cam_ptr_) return;
+		Spinnaker::GenApi::INodeMap &device_node_map = cam_ptr_->GetTLDeviceNodeMap();
+		Spinnaker::GenApi::FeatureList_t features;
+		Spinnaker::GenApi::CCategoryPtr category = device_node_map.GetNode("DeviceInformation");
+		if (Spinnaker::GenApi::IsAvailable(category) && Spinnaker::GenApi::IsReadable(category)) {
+			category->GetFeatures(features);
+			for (auto it = features.begin(); it != features.end(); ++it) {
+				Spinnaker::GenApi::CNodePtr feature_node = *it;
+				std::cout << feature_node->GetName() << " : ";
+				Spinnaker::GenApi::CValuePtr value_ptr = (Spinnaker::GenApi::CValuePtr) feature_node;
+				std::cout << (Spinnaker::GenApi::IsReadable(value_ptr) ? value_ptr->ToString() : "Node not readable");
+				std::cout << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Device control information not available." << std::endl;
+		}
+	}
 
-  void SetImageMode(int format, int width = 0, int height = 0, int binning = 1, int decimation = 1, int offset_x = 0, int offset_y = 0) {
-  	this->SetPixelFormat(format);
-  	if (width == 0) {
-  		width = cam_ptr_->WidthMax.GetValue();
-  	}
-  	if (height == 0) {
-  		height = cam_ptr_->HeightMax.GetValue();
-  	}
-  	cam_ptr_->Width.SetValue(width);
-  	cam_ptr_->Height.SetValue(height);
-  	cam_ptr_->OffsetX.SetValue(offset_x);
-  	cam_ptr_->OffsetY.SetValue(offset_y);
-  	cam_ptr_->BinningVertical.SetValue(binning);
-  	cam_ptr_->DecimationVertical.SetValue(decimation);
-  }
+	bool set(const std::string &property_name, const std::string &entry_name) {
+		std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
+		Spinnaker::GenApi::CEnumerationPtr enumerationPtr = node_map_->GetNode(property_name.c_str());
+		if (Spinnaker::GenApi::IsAvailable(enumerationPtr)) {
+			if (Spinnaker::GenApi::IsWritable(enumerationPtr)) {
+				Spinnaker::GenApi::CEnumEntryPtr enumEmtryPtr = enumerationPtr->GetEntryByName(entry_name.c_str());
+				if (Spinnaker::GenApi::IsAvailable(enumEmtryPtr)) {
+					if (Spinnaker::GenApi::IsReadable(enumEmtryPtr)) {
+						enumerationPtr->SetIntValue(enumEmtryPtr->GetValue());
+						return true;
+					} else {
+						std::cout << "[ERROR]: Entry name " << entry_name << " not writable" << std::endl;
+					}
+				} else {
+					std::cout << "[ERROR]: Entry name " << entry_name << " not available" << std::endl;
+				}
+			} else {
+				std::cout << "[ERROR]: Enumeration " << property_name << " not writable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Enumeration " << property_name << " not available" << std::endl;
+		}
+		return false;
+	}
 
-  void SetReverseX() {
-  	cam_ptr_->ReverseX.SetValue(true);
-  }
+	bool set(const std::string &property_name, const float &value) {
+		std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
+		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode(property_name.c_str());
+		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
+			if (Spinnaker::GenApi::IsWritable(floatPtr)) {
+				floatPtr->SetValue(value);
+				return true;
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return false;
+	}
 
-  void SetReverseY() {
-  	cam_ptr_->ReverseY.SetValue(true);
-  }
+	bool set(const std::string &property_name, const bool &value) {
+		std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
+		Spinnaker::GenApi::CBooleanPtr boolPtr = node_map_->GetNode(property_name.c_str());
+		if (Spinnaker::GenApi::IsAvailable(boolPtr)) {
+			if (Spinnaker::GenApi::IsWritable(boolPtr)) {
+				boolPtr->SetValue(value);
+				return true;
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return false;
+	}
 
-  // Setting Hardware/Software Trigger
-  void EnableHardwareTrigger(int line_number) {
-    this->DisableTrigger();
-    switch(line_number) {
-    	case LINE0:
-    		cam_ptr_->TriggerSource.SetValue(TriggerSourceEnums::TriggerSource_Line0);
-			break;
-    	case LINE1:
-    		cam_ptr_->TriggerSource.SetValue(TriggerSourceEnums::TriggerSource_Line1);
-			break;
-    	case LINE2:
-    		cam_ptr_->TriggerSource.SetValue(TriggerSourceEnums::TriggerSource_Line2);
-    		break;
-//    	case LINE3:
-//    		cam_ptr_->TriggerSource.SetValue(TriggerSourceEnums::TriggerSource_Line3);
-//			break;
-		default:
-			std::cout << "Unable to set line " << line_number << "!" << std::endl;
-			break;
-    }
-    cam_ptr_->TriggerMode.SetValue(TriggerModeEnums::TriggerMode_On);
-    cam_ptr_->TriggerSelector.SetValue(TriggerSelectorEnums::TriggerSelector_FrameStart);
-    cam_ptr_->TriggerActivation.SetValue(TriggerActivationEnums::TriggerActivation_RisingEdge);
-  }
-  void EnableSoftwareTrigger() {
-    this->DisableTrigger();
-    cam_ptr_->TriggerSource.SetValue(TriggerSourceEnums::TriggerSource_Software);
-    cam_ptr_->TriggerMode.SetValue(TriggerModeEnums::TriggerMode_On);
-  }
-  void DisableTrigger() {
-    if (cam_ptr_->TriggerMode == NULL || cam_ptr_->TriggerMode.GetAccessMode() != RW) {
-      std::cout << "Unable to disable trigger mode. Aborting..." << std::endl;
-      exit(-1);
-    }
-    cam_ptr_->TriggerMode.SetValue(TriggerModeEnums::TriggerMode_Off);
-  }
+	bool set(const std::string &property_name, const int &value) {
+		std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
+		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
+		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
+			if (Spinnaker::GenApi::IsWritable(intPtr)) {
+				intPtr->SetValue(value);
+				return true;
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return false;
+	}
 
-  void EnableStrobe(int line_number) {
-    switch(line_number) {
-    	case LINE0:
-    		cam_ptr_->LineSelector.SetValue(LineSelectorEnums::LineSelector_Line0);
-			break;
-    	case LINE1:
-    		cam_ptr_->LineSelector.SetValue(LineSelectorEnums::LineSelector_Line1);
-			break;
-    	case LINE2:
-    		cam_ptr_->LineSelector.SetValue(LineSelectorEnums::LineSelector_Line2);
-    		break;
-//    	case LINE3:
-//    		cam_ptr_->LineSelector.SetValue(LineSelectorEnums::LineSelector_Line3);
-//			break;
-		default:
-			std::cout << "Unable to set line " << line_number << "!" << std::endl;
-			break;
-    }
-    cam_ptr_->LineMode.SetValue(LineModeEnums::LineMode_Output);
-    cam_ptr_->LineSource.SetValue(LineSourceEnums::LineSource_ExposureActive);
-  }
+	bool setMaxInt(const std::string &property_name) {
+		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
+		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
+			if (Spinnaker::GenApi::IsWritable(intPtr)) {
+				std::cout << "Setting " << property_name << " to " << intPtr->GetMax() << " (int)" << std::endl;
+				intPtr->SetValue(intPtr->GetMax());
+				return true;
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return false;
+	}
 
-  // Setting Black Level
-  void EnableBlackLevelAuto() {
-    cam_ptr_->BlackLevelAuto.SetValue(BlackLevelAutoEnums::BlackLevelAuto_Continuous);
-  }
-  void DisableBlackLevelAuto() {
-    cam_ptr_->BlackLevelAuto.SetValue(BlackLevelAutoEnums::BlackLevelAuto_Off);
-  }
-  void SetBlackLevel(double black_level) {
-    cam_ptr_->BlackLevel.SetValue(black_level);
-  }
-  double GetBlackLevel() const {
-    return cam_ptr_->BlackLevel.GetValue();
-  }
+	void execute(const std::string& command) {
+		Spinnaker::GenApi::CCommandPtr commandPtr = node_map_->GetNode(command.c_str());
+		if (!Spinnaker::GenApi::IsAvailable(commandPtr) || !Spinnaker::GenApi::IsWritable(commandPtr))
+		{
+			std::cout << "Unable to command " << command << ". Aborting..." << std::endl;
+		} else {
+			commandPtr->Execute();
+		}
+	}
 
-  // Setting Frame Rate
-  void EnableFrameRateAuto() {
-    CBooleanPtr AcquisitionFrameRateEnable = node_map_->GetNode("AcquisitionFrameRateEnable");
-    if (!IsAvailable(AcquisitionFrameRateEnable) || !IsReadable(AcquisitionFrameRateEnable)) {
-      std::cout << "Unable to enable frame rate." << std::endl;
-      return;
-    }
-    AcquisitionFrameRateEnable->SetValue(0);
-  }
-  void DisableFrameRateAuto() {
-    CBooleanPtr AcquisitionFrameRateEnable = node_map_->GetNode("AcquisitionFrameRateEnable");
-    if (!IsAvailable(AcquisitionFrameRateEnable) || !IsReadable(AcquisitionFrameRateEnable)) {
-      std::cout << "Unable to enable frame rate." << std::endl;
-      return;
-    }
-    AcquisitionFrameRateEnable->SetValue(1);
-  }
-  void SetFrameRate(double frame_rate) {
-    cam_ptr_->AcquisitionFrameRate.SetValue(frame_rate);
-  }
-  double GetFrameRate() const {
-    return cam_ptr_->AcquisitionFrameRate.GetValue();
-  }
+	float getFloat(const std::string& property_name) {
+		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode("property_name");
+		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
+			if (Spinnaker::GenApi::IsReadable(floatPtr)) {
+				return floatPtr->GetValue();
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not readable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return -1;
+	}
 
-  // Setting Exposure Time, us
-  void EnableExposureAuto() {
-    cam_ptr_->ExposureAuto.SetValue(ExposureAutoEnums::ExposureAuto_Continuous);
-  }
-  void DisableExposureAuto() {
-    cam_ptr_->ExposureAuto.SetValue(ExposureAutoEnums::ExposureAuto_Off);
-    cam_ptr_->ExposureMode.SetValue(ExposureModeEnums::ExposureMode_Timed);
-  }
-  void SetExposureTime(double exposure_time) {
-    cam_ptr_->ExposureTime.SetValue(exposure_time);
-  }
-  double GetExposureTime() const {
-    return cam_ptr_->ExposureTime.GetValue();
-  }
-  void SetExposureUpperbound(double value) {
-    CFloatPtr AutoExposureExposureTimeUpperLimit = node_map_->GetNode("AutoExposureExposureTimeUpperLimit");
-    AutoExposureExposureTimeUpperLimit->SetValue(value);
-  }
+	int getInteger(const std::string& property_name) {
+		Spinnaker::GenApi::CIntegerPtr integerPtr = node_map_->GetNode("property_name");
+		if (Spinnaker::GenApi::IsAvailable(integerPtr)) {
+			if (Spinnaker::GenApi::IsReadable(integerPtr)) {
+				return integerPtr->GetValue();
+			} else {
+				std::cout << "[ERROR]: Feature " << property_name << " not readable" << std::endl;
+			}
+		} else {
+			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+		}
+		return -1;
+	}
 
-  // Setting Gain
-  void EnableGainAuto() {
-    cam_ptr_->GainAuto.SetValue(GainAutoEnums::GainAuto_Continuous);
-  }
-  void DisableGainAuto() {
-    cam_ptr_->GainAuto.SetValue(GainAutoEnums::GainAuto_Off);
-  }
-  void SetGain(double gain) {
-    cam_ptr_->Gain.SetValue(gain);
-  }
-  double GetGain() const {
-    return cam_ptr_->Gain.GetValue();
-  }
+	void SetExposureEndEvent() {
+		// Select the Exposure End event
+		set("EventSelector", std::string("ExposureEnd"));
+		// Turn on the Event notification for Exposure End Event
+		set("EventNotification", std::string("On"));
 
-  // Setting Gamma
-  void SetGamma(double gamma) {
-    cam_ptr_->Gamma.SetValue(gamma);
-  }
-  double GetGamma() const {
-    return cam_ptr_->Gamma.GetValue();
-  }
+		// Register event handler
+		cam_ptr_->RegisterEvent(*event_handler_, "EventExposureEnd");;
+	}
 
-  // Setting White Balance
-  void EnableWhiteBalanceAuto() {
-    cam_ptr_->BalanceWhiteAuto.SetValue(BalanceWhiteAutoEnums::BalanceWhiteAuto_Continuous);
-  }
-  void DisableWhiteBalanceAuto() {
-    cam_ptr_->BalanceWhiteAuto.SetValue(BalanceWhiteAutoEnums::BalanceWhiteAuto_Off);
-  }
-  void SetWhiteBalanceBlue(double value) {
-    cam_ptr_->BalanceRatioSelector.SetValue(BalanceRatioSelectorEnums::BalanceRatioSelector_Blue);
-    CFloatPtr BalanceRatio = node_map_->GetNode("BalanceRatio");
-    BalanceRatio->SetValue(value);
-  }
-  void SetWhiteBalanceRed(double value) {
-    cam_ptr_->BalanceRatioSelector.SetValue(BalanceRatioSelectorEnums::BalanceRatioSelector_Red);
-    CFloatPtr BalanceRatio = node_map_->GetNode("BalanceRatio");
-    BalanceRatio->SetValue(value);
-  }
-  double GetWhiteBalanceBlue() const {
-    cam_ptr_->BalanceRatioSelector.SetValue(BalanceRatioSelectorEnums::BalanceRatioSelector_Blue);
-    CFloatPtr BalanceRatio = node_map_->GetNode("BalanceRatio");
-    return BalanceRatio->GetValue();
-  }
-  double GetWhiteBalanceRed() const {
-    cam_ptr_->BalanceRatioSelector.SetValue(BalanceRatioSelectorEnums::BalanceRatioSelector_Red);
-    CFloatPtr BalanceRatio = node_map_->GetNode("BalanceRatio");
-    return BalanceRatio->GetValue();
-  }
+	// Start/End camera
+	void Start() {
+		set("AcquisitionMode", std::string("Continuous"));
+		cam_ptr_->BeginAcquisition();
+	}
 
-  // Get Image Timestamp
-  uint64_t GetSystemTimestamp() const {
-    return system_timestamp_;
-  }
-  uint64_t GetImageTimestamp() const {
-    return image_timestamp_;
-  }
+	void End() {
+		cam_ptr_->EndAcquisition();
+	}
 
-  // Grab Next Image
-  cv::Mat GrabNextImage(const std::string& format = "bayer") {
-    ImagePtr image_ptr= cam_ptr_->GetNextImage();
-    system_timestamp_ = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-    image_timestamp_ = image_ptr->GetTimeStamp();
-    int width = image_ptr->GetWidth();
-    int height = image_ptr->GetHeight();
-    cv::Mat result;
-    if (format == "bgr") {
-      ImagePtr converted_image_ptr = image_ptr->Convert(PixelFormat_BGR8);
-      cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
-      result = temp_img.clone();
-    } else if (format == "bayer") {
-      ImagePtr converted_image_ptr = image_ptr->Convert(PixelFormat_BayerRG8);
-      return cv::Mat(height, width, CV_8UC1, converted_image_ptr->GetData());
-    } else if (format == "mono") {
-      ImagePtr converted_image_ptr = image_ptr->Convert(PixelFormat_Mono8);
-      cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
-      result = temp_img.clone();
-    } else {
-      throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
-    }
-    image_ptr->Release();
-    return result;
-  }
-  void TriggerSoftwareExecute() {
-    cam_ptr_->TriggerSoftware.Execute();
-  }
+	void SetPixelFormat(int format = BAYER_RG8) {
+		switch (format) {
+			case MONO8:
+				set("PixelFormat", std::string("Mono8"));
+				break;
+			case MONO12_PACKED:
+				set("PixelFormat", std::string("Mono12Packed"));
+				break;
+			case MONO16:
+				set("PixelFormat", std::string("Mono16"));
+				break;
+			case RGB8:
+				set("PixelFormat", std::string("RGB8"));
+				break;
+			case BAYER_RG8:
+				set("PixelFormat", std::string("BayerRG8"));
+				break;
+			case BAYER_RG16:
+				set("PixelFormat", std::string("BayerRG16"));
+				break;
+		}
+	}
+
+	void SetImageMode(int format = BAYER_RG8,
+										int width = 0,
+										int height = 0,
+										int binning = 1,
+										int decimation = 1,
+										int offset_x = 0,
+										int offset_y = 0) {
+		this->SetPixelFormat(format);
+		if (width == 0) {
+			setMaxInt("Width");
+		} else {
+			set("Width", width);
+		}
+		if (height == 0) {
+			setMaxInt("Height");
+		} else {
+			set("Height", height);
+		}
+		set("OffsetX", offset_x);
+		set("OffsetY", offset_y);
+		set("BinningVertical", binning);
+		set("DecimationVertical", decimation);
+	}
+
+	void SetReverseX() {
+		set("ReverseX", true);
+	}
+
+	void SetReverseY() {
+		set("ReverseY", true);
+	}
+
+	// Setting Hardware/Software Trigger
+	void EnableHardwareTrigger(int line_number) {
+		set("TriggerMode", std::string("Off"));
+		switch (line_number) {
+			case LINE0:
+				set("TriggerSource", std::string("Line0"));
+				break;
+			case LINE1:
+				set("TriggerSource", std::string("Line1"));
+				break;
+			case LINE2:
+				set("TriggerSource", std::string("Line2"));
+				break;
+	   	case LINE3:
+	   		set("TriggerSource", std::string("Line3"));
+				break;
+			default:
+				std::cout << "Unable to set line " << line_number << "!" << std::endl;
+				break;
+		}
+		set("TriggerMode", std::string("On"));
+		set("TriggerSelector", std::string("FrameStart"));
+		set("TriggerActivation", std::string("RisingEdge"));
+	}
+
+	void EnableSoftwareTrigger() {
+		set("TriggerMode", std::string("Off"));
+		set("TriggerSource", std::string("Software"));
+		set("TriggerMode", std::string("On"));
+	}
+
+	void DisableTrigger() {
+		set("TriggerMode", std::string("Off"));
+	}
+
+	void EnableStrobe(int line_number) {
+		switch (line_number) {
+			case LINE0:
+				set("LineSelector", std::string("Line0"));
+				break;
+			case LINE1:
+				set("LineSelector", std::string("Line1"));
+				break;
+			case LINE2:
+				set("LineSelector", std::string("Line2"));
+				break;
+   		case LINE3:
+				set("LineSelector", std::string("Line3"));
+				break;
+			default:
+				std::cout << "Unable to set line " << line_number << "!" << std::endl;
+				break;
+		}
+		set("LineMode", std::string("Output"));
+		set("LineSource", std::string("ExposureActive"));
+	}
+
+	// Setting Black Level
+	void EnableBlackLevelAuto() {
+		set("BlackLevelAuto", std::string("Continuous"));
+	}
+
+	void DisableBlackLevelAuto() {
+		set("BlackLevelAuto", std::string("Off"));
+	}
+
+	void SetBlackLevel(float black_level) {
+		set("BlackLevel", black_level);
+	}
+
+	double GetBlackLevel() {
+		return getFloat("BlackLevel");
+	}
+
+	// Setting Frame Rate
+	void EnableFrameRateAuto() {
+		set("AcquisitionFrameRateAuto", std::string("Continuous"));
+	}
+
+	void DisableFrameRateAuto() {
+		set("AcquisitionFrameRateAuto", std::string("Off"));
+	}
+
+	void SetFrameRate(float frame_rate) {
+		set("AcquisitionFrameRate", frame_rate);
+	}
+
+	double GetFrameRate() {
+		return getFloat("AcquisitionFrameRate");
+	}
+
+	// Setting Exposure Time, us
+	void EnableExposureAuto() {
+		set("ExposureAuto", std::string("Continuous"));
+	}
+
+	void DisableExposureAuto() {
+		set("ExposureAuto", std::string("Off"));
+		set("ExposureMode", std::string("Timed"));
+	}
+
+	void SetExposureTime(float exposure_time) {
+		set("ExposureTime", exposure_time);
+	}
+
+	double GetExposureTime() {
+		return getFloat("ExposureTime");
+	}
+
+	void SetExposureUpperbound(float value) {
+		set("AutoExposureExposureTimeUpperLimit", value);
+	}
+
+	// Setting Gain
+	void EnableGainAuto() {
+		set("GainAuto", std::string("Continuous"));
+	}
+
+	void DisableGainAuto() {
+		set("GainAuto", std::string("Off"));
+	}
+
+	void SetGain(float gain) {
+		set("Gain", gain);
+	}
+
+	float GetGain() {
+		return getFloat("Gain");
+	}
+
+	// Setting Gamma
+	void SetGamma(float gamma) {
+		set("Gamma", gamma);
+	}
+
+	float GetGamma() {
+		return getFloat("Gamma");
+	}
+
+	// Setting White Balance
+	void EnableWhiteBalanceAuto() {
+		set("BalanceWhiteAuto", std::string("Continuous"));
+	}
+
+	void DisableWhiteBalanceAuto() {
+		set("BalanceWhiteAuto", std::string("Off"));
+	}
+
+	void SetWhiteBalanceBlue(float value) {
+		set("BalanceRatioSelector", std::string("Blue"));
+		set("BalanceRatio", value);
+	}
+
+	void SetWhiteBalanceRed(float value) {
+		set("BalanceRatioSelector", std::string("Red"));
+		set("BalanceRatio", value);
+	}
+
+	float GetWhiteBalanceBlue() {
+		set("BalanceRatioSelector", std::string("Blue"));
+		return getFloat("BalanceRatio");
+	}
+
+	float GetWhiteBalanceRed() {
+		set("BalanceRatioSelector", std::string("Red"));
+		return getFloat("BalanceRatio");
+	}
+
+	// Get Image Timestamp
+	uint64_t GetSystemTimestamp() const {
+		return system_timestamp_;
+	}
+
+	uint64_t GetImageTimestamp() const {
+		return image_timestamp_;
+	}
+
+	// Grab Next Image
+	cv::Mat GrabNextImage(const std::string &format = "bayer") {
+		Spinnaker::ImagePtr image_ptr = cam_ptr_->GetNextImage();
+		system_timestamp_ = std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+		image_timestamp_ = image_ptr->GetTimeStamp();
+		int width = image_ptr->GetWidth();
+		int height = image_ptr->GetHeight();
+		cv::Mat result;
+		if (format == "bgr") {
+			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8);
+			cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
+			result = temp_img.clone();
+		} else if (format == "bayer") {
+			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BayerRG8);
+			return cv::Mat(height, width, CV_8UC1, converted_image_ptr->GetData());
+		} else if (format == "mono") {
+			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8);
+			cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
+			result = temp_img.clone();
+		} else {
+			throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
+		}
+		image_ptr->Release();
+		return result;
+	}
+
+	void TriggerSoftwareExecute() {
+		execute("TriggerSoftware");
+	}
 
 private:
-  CameraPtr cam_ptr_;
-  INodeMap* node_map_;
-  uint64_t system_timestamp_;
-  uint64_t image_timestamp_;
+	Spinnaker::CameraPtr cam_ptr_;
+	Spinnaker::GenApi::INodeMap *node_map_;
+	Spinnaker::SystemPtr system_;
+	Spinnaker::CameraList camList_;
+	DeviceEventHandler* event_handler_;
+	uint64_t system_timestamp_;
+	uint64_t image_timestamp_;
 };
