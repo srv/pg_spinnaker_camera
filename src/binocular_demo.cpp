@@ -17,19 +17,25 @@ int main(int argc, char** argv) {
   if (cam1.IsConnected()) {
     cam1.PrintDeviceInfo();
 
-    cam1.EnableStrobe(LINE2);
-    cam1.EnableHardwareTrigger(LINE3);
+    // cam1.EnableStrobe(LINE2);
+    // cam1.EnableHardwareTrigger(LINE3);
 
     cam1.SetImageMode(BAYER_RG8);
-    cam1.DisableWhiteBalanceAuto();
-    cam1.SetWhiteBalanceBlue(1.0);
-    cam1.SetWhiteBalanceRed(1.0);
-    cam1.EnableFrameRateAuto();
+    // cam1.DisableWhiteBalanceAuto();
+    // cam1.SetWhiteBalanceBlue(1.0);
+    // cam1.SetWhiteBalanceRed(1.0);
     // cam1.SetFrameRate(1.0);
-    cam1.DisableExposureAuto();
-    cam1.SetExposureTime(5000);
-    cam1.DisableGainAuto();
-    cam1.SetGain(3.0);
+    // cam1.DisableExposureAuto();
+    // cam1.SetExposureTime(5000);
+    // cam1.DisableGainAuto();
+    // cam1.SetGain(3.0);
+
+    cam1.DisableTrigger();
+    cam1.EnableFrameRateAuto();
+    cam1.EnableWhiteBalanceAuto();
+    cam1.EnableExposureAuto();
+    cam1.EnableGainAuto();
+
 
     cam1.SetExposureEndEvent();
 
@@ -41,8 +47,15 @@ int main(int argc, char** argv) {
 
   // ROS spin
   ros::Rate r(10);
-  while (ros::ok())
+
+  // cv::namedWindow("test", 0);
+
+  while (ros::ok()) {
+    // cv::Mat img = cam1.GrabNextImage();
+    // cv::imshow("test", img);
+    // cv::waitKey(3);
     r.sleep();
+  }
   std::cout << "End" << std::endl;
   cam1.End();
   ros::shutdown();

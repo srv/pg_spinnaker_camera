@@ -215,7 +215,7 @@ public:
 		set("EventNotification", std::string("On"));
 
 		// Register event handler
-		cam_ptr_->RegisterEvent(*event_handler_, "EventExposureEnd");;
+		cam_ptr_->RegisterEvent(*event_handler_, "EventExposureEnd");
 	}
 
 	// Start/End camera
