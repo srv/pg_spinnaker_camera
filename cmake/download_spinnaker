@@ -54,8 +54,7 @@ ARCHS = {
     }
 
 archive_url, folder_name, shared_library = ARCHS[sys.argv[1]]
-
-library_dest = sys.argv[2]
+destination_folder = sys.argv[2]
 
 logging.info("Logging into ptgrey.com.")
 cj = cookielib.CookieJar()
@@ -79,6 +78,17 @@ if not os.path.exists(os.path.join(os.getcwd(), "usr")):
 for filename in os.listdir(os.path.join(os.getcwd(), folder_name)):
     if not os.path.exists(os.path.join(os.getcwd(), "usr/", filename)):
         shutil.move(os.path.join(os.getcwd(), folder_name, filename), os.path.join(os.getcwd(), "usr/", filename))
-os.rmdir(folder_name)
 
-shutil.copyfile(shared_library, library_dest)
+# now we do some thing for XML files; move them next to the catkin binary
+xml_path = os.path.join(os.getcwd(), "usr/bin")
+xml_files = os.listdir(xml_path)
+flycap_folder = "flycapture"
+os.mkdir(os.path.join(xml_path, flycap_folder))
+
+for files in xml_files:
+    if files.endswith(".xml"):
+        origin_file = os.path.join(xml_path, files)
+        print('Copying ' + origin_file + ' to ' + destination_folder)
+        shutil.copy(origin_file, destination_folder)
+
+os.rmdir(folder_name)
