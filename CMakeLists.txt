@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_geometry
   image_transport
   message_filters
+  cv_bridge
   roscpp
   sensor_msgs
   std_msgs
@@ -61,13 +62,6 @@ add_executable(pg_stereo_camera
   src/nodes/stereo_camera_node.cpp
   src/stereo_camera.cpp)
 target_link_libraries(pg_stereo_camera
-  ${OpenCV_LIBRARIES}
-  ${catkin_LIBRARIES}
-  ${Spinnaker_LIBRARIES})
-
-add_executable(binocular_demo
-  src/binocular_demo.cpp)
-target_link_libraries(binocular_demo
   ${OpenCV_LIBRARIES}
   ${catkin_LIBRARIES}
   ${Spinnaker_LIBRARIES})

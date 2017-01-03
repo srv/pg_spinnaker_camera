@@ -33,8 +33,7 @@
 #ifndef STEREO_CAMERA_H
 #define STEREO_CAMERA_H
 
-#include <Spinnaker.h>
-#include <SpinGenApi/SpinnakerGenApi.h>
+#include <pg_spinnaker_camera/spinnaker_camera.h>
 
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
@@ -44,16 +43,55 @@
 
 #include <opencv2/opencv.hpp>
 
-#include <boost/bind.hpp>
-#include <boost/thread/thread.hpp>
-#include <boost/thread/mutex.hpp>
-
-using namespace boost;
-using namespace Spinnaker;
-using namespace Spinnaker::GenApi;
-using namespace Spinnaker::GenICam;
+#include <thread>
+#include <mutex>
 
 namespace pg_spinnaker_camera {
+class StereoCameraConfig {
+ public:
+  int width;
+  int height;
+  int offset_x;
+  int offset_y;
+  int binning_vertical;
+  int decimation_vertical;
+  std::string pixel_format;
+  std::string pixel_coding;
+  std::string video_mode;
+  std::string line_selector;
+  std::string line_mode;
+  std::string line_source;
+  std::string trigger_source;
+  std::string trigger_selector;
+  std::string trigger_activation;
+  std::string acquisition_frame_rate_auto;
+  bool acquisition_frame_rate_enabled;
+  float acquisition_frame_rate;
+  std::string exposure_auto;
+  float exposure_time;
+  float auto_exposure_exposure_time_upper_limit;
+  float gain;
+  std::string gain_auto;
+  float auto_gain_lower_limit;
+  float auto_gain_upper_limit;
+  float black_level;
+  std::string black_level_auto;
+  float gamma;
+  bool gamma_enabled;
+  float sharpness;
+  bool sharpness_enabled;
+  std::string sharpness_auto;
+  float hue;
+  bool hue_enabled;
+  std::string hue_auto;
+  float saturation;
+  bool saturation_enabled;
+  std::string saturation_auto;
+  std::string balance_white_auto;
+  int balance_ratio_red;
+  int balance_ratio_blue;
+};
+
 class StereoCamera {
  public:
   StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp);
@@ -63,14 +101,19 @@ class StereoCamera {
  private:
 
   // Cameras
-  CameraPtr l_cam_;
-  CameraPtr r_cam_;
+  std::shared_ptr<SpinnakerCamera> l_cam_;
+  std::shared_ptr<SpinnakerCamera> r_cam_;
 
   // Parameters
   std::string left_serial_number_;
   std::string right_serial_number_;
   std::string left_camera_info_url_;
   std::string right_camera_info_url_;
+  StereoCameraConfig config_;
+
+  // Publish counters
+  long int left_counter_;
+  long int right_counter_;
 
   // Node handles
   ros::NodeHandle nh_;
@@ -83,11 +126,13 @@ class StereoCamera {
   image_transport::CameraPublisher left_pub_;
   image_transport::CameraPublisher right_pub_;
 
-  boost::shared_ptr<camera_info_manager::CameraInfoManager> left_info_man_;
-  boost::shared_ptr<camera_info_manager::CameraInfoManager> right_info_man_;
+  std::shared_ptr<camera_info_manager::CameraInfoManager> left_info_man_;
+  std::shared_ptr<camera_info_manager::CameraInfoManager> right_info_man_;
 
   void leftFrameThread();
   void rightFrameThread();
+
+  void configureCamera(const std::shared_ptr<SpinnakerCamera>& cam, bool is_left);
 };
 }
 #endif

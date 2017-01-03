@@ -7,11 +7,9 @@
 #include <iomanip>
 #include <sstream>
 #include <chrono>
+#include <thread>
+#include <mutex>
 #include <sys/stat.h>
-
-//using namespace Spinnaker;
-//using namespace Spinnaker::GenApi;
-//using namespace Spinnaker::GenICam;
 
 enum Lines {
 	LINE0, LINE1, LINE2, LINE3
@@ -20,20 +18,25 @@ enum PixelFormat {
 	MONO8, MONO12_PACKED, MONO16, RGB8, BAYER_RG8, BAYER_RG16
 };
 
-// Nested class to hide from implementation
-class DeviceEventHandler : public Spinnaker::DeviceEvent {
- public:
-	DeviceEventHandler() {};
-	~DeviceEventHandler(){};
-	// Once Exposure End Event is detected, the OnDeviceEvent function will be called
-	void OnDeviceEvent(Spinnaker::GenICam::gcstring eventName) {
-		std::cout << "Event " << eventName << std::endl;
-	}
-};
-
 class SpinnakerCamera {
 public:
-	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler()) {
+
+	// Nested class to hide from implementation
+	class DeviceEventHandler : public Spinnaker::DeviceEvent {
+	 public:
+		DeviceEventHandler(SpinnakerCamera* cam) : cam_(cam) {};
+		~DeviceEventHandler(){};
+		// Once Exposure End Event is detected, the OnDeviceEvent function will be called
+		void OnDeviceEvent(Spinnaker::GenICam::gcstring eventName) {
+			std::cout << "Event " << eventName << std::endl;
+			std::thread t(cam_->callback_);
+			t.detach();
+		}
+	 private:
+	 	SpinnakerCamera* cam_;
+	};
+
+	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler(this)), serial_(serial_number) {
 		system_ = Spinnaker::System::GetInstance();
 		camList_ = system_->GetCameras();
 		unsigned int numCameras = camList_.GetSize();
@@ -42,6 +45,7 @@ public:
 		if (cam_ptr_) {
 			cam_ptr_->Init();
 			node_map_ = &cam_ptr_->GetNodeMap();
+			setCallback(std::bind(&SpinnakerCamera::callback, this));
 		} else {
 			std::cout << "FAILED to open camera " << serial_number << ". Is it connected?" << std::endl;
 		}
@@ -77,7 +81,7 @@ public:
 				std::cout << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Device control information not available." << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Device control information not available." << std::endl;
 		}
 	}
 
@@ -92,16 +96,16 @@ public:
 						enumerationPtr->SetIntValue(enumEmtryPtr->GetValue());
 						return true;
 					} else {
-						std::cout << "[ERROR]: Entry name " << entry_name << " not writable" << std::endl;
+						std::cout << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not writable" << std::endl;
 					}
 				} else {
-					std::cout << "[ERROR]: Entry name " << entry_name << " not available" << std::endl;
+					std::cout << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not available" << std::endl;
 				}
 			} else {
-				std::cout << "[ERROR]: Enumeration " << property_name << " not writable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Enumeration " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -114,10 +118,10 @@ public:
 				floatPtr->SetValue(value);
 				return true;
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -130,10 +134,10 @@ public:
 				boolPtr->SetValue(value);
 				return true;
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -146,10 +150,10 @@ public:
 				intPtr->SetValue(value);
 				return true;
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -162,10 +166,10 @@ public:
 				intPtr->SetValue(intPtr->GetMax());
 				return true;
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not writable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -186,10 +190,10 @@ public:
 			if (Spinnaker::GenApi::IsReadable(floatPtr)) {
 				return floatPtr->GetValue();
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not readable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return -1;
 	}
@@ -200,10 +204,10 @@ public:
 			if (Spinnaker::GenApi::IsReadable(integerPtr)) {
 				return integerPtr->GetValue();
 			} else {
-				std::cout << "[ERROR]: Feature " << property_name << " not readable" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: Feature " << property_name << " not available" << std::endl;
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return -1;
 	}
@@ -300,7 +304,7 @@ public:
 	   		set("TriggerSource", std::string("Line3"));
 				break;
 			default:
-				std::cout << "Unable to set line " << line_number << "!" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
 				break;
 		}
 		set("TriggerMode", std::string("On"));
@@ -333,7 +337,7 @@ public:
 				set("LineSelector", std::string("Line3"));
 				break;
 			default:
-				std::cout << "Unable to set line " << line_number << "!" << std::endl;
+				std::cout << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
 				break;
 		}
 		set("LineMode", std::string("Output"));
@@ -466,30 +470,44 @@ public:
 		system_timestamp_ = std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 		image_timestamp_ = image_ptr->GetTimeStamp();
-		int width = image_ptr->GetWidth();
-		int height = image_ptr->GetHeight();
-		cv::Mat result;
-		if (format == "bgr") {
-			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8);
-			cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
-			result = temp_img.clone();
-		} else if (format == "bayer") {
-			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BayerRG8);
-			return cv::Mat(height, width, CV_8UC1, converted_image_ptr->GetData());
-		} else if (format == "mono") {
-			Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8);
-			cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
-			result = temp_img.clone();
+
+		if (image_ptr->IsIncomplete()) {
+			std::cout << "[ERROR]: (" << serial_ << ")  Received and incomplete image " << std::endl;
+			return cv::Mat();
 		} else {
-			throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
+			int width = image_ptr->GetWidth();
+			int height = image_ptr->GetHeight();
+			cv::Mat result;
+			if (format == "bgr") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8);
+				cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
+				result = temp_img.clone();
+			} else if (format == "bayer") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BayerRG8);
+				return cv::Mat(height, width, CV_8UC1, converted_image_ptr->GetData());
+			} else if (format == "mono") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8);
+				cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
+				result = temp_img.clone();
+			} else {
+				throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
+			}
+			image_ptr->Release();
+			return result;
 		}
-		image_ptr->Release();
-		return result;
 	}
 
 	void TriggerSoftwareExecute() {
 		execute("TriggerSoftware");
 	}
+
+	void callback() {
+		std::cout << "(" << serial_ << ") This is an empty callback..." << std::endl;
+	}
+
+	void setCallback(std::function<void (void)> f) {
+    callback_ = f;
+  }
 
 private:
 	Spinnaker::CameraPtr cam_ptr_;
@@ -497,6 +515,8 @@ private:
 	Spinnaker::SystemPtr system_;
 	Spinnaker::CameraList camList_;
 	DeviceEventHandler* event_handler_;
+	std::function<void (void)> callback_;
 	uint64_t system_timestamp_;
 	uint64_t image_timestamp_;
+	std::string serial_;
 };

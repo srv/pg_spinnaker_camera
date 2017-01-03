@@ -12,10 +12,12 @@ int main(int argc, char** argv) {
   ros::NodeHandle nhp("~");
 
   SpinnakerCamera cam1("16401228");
-  // SpinnakerCamera cam2("16401229");
+  SpinnakerCamera cam2("16401229");
 
-  if (cam1.IsConnected()) {
+  if (cam1.IsConnected() && cam2.IsConnected()) {
+    // Optional
     cam1.PrintDeviceInfo();
+    cam2.PrintDeviceInfo();
 
     // cam1.EnableStrobe(LINE2);
     // cam1.EnableHardwareTrigger(LINE3);
