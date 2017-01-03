@@ -87,8 +87,21 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("balance_ratio_red", config_.balance_ratio_red);
   nhp_.getParam("balance_ratio_blue", config_.balance_ratio_blue);
 
-  configureCamera(l_cam_, true);
-  configureCamera(r_cam_, false);
+  l_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(left_serial_number_));
+  r_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(right_serial_number_));
+
+  if (l_cam_->IsConnected()) {
+    std::cout << "Left camera " << left_serial_number_ << " connected!" << std::endl;
+    if (r_cam_->IsConnected()) {
+      std::cout << "Right camera " << right_serial_number_ << " connected!" << std::endl;
+      configureCamera(l_cam_, true);
+      configureCamera(r_cam_, false);
+    } else {
+      std::cout << "Right camera " << right_serial_number_ << " not connected!" << std::endl;
+    }
+  } else {
+    std::cout << "Right camera " << right_serial_number_ << " not connected!" << std::endl;
+  }
 }
 
 StereoCamera::~StereoCamera() {
@@ -101,6 +114,7 @@ StereoCamera::~StereoCamera() {
 }
 
 void StereoCamera::run() {
+  if (!l_cam_->IsConnected() && !r_cam_->IsConnected()) return;
   // Set the image publishers before the streaming
   left_pub_  = it_.advertiseCamera("/stereo_forward/left/image_raw",  1);
   right_pub_ = it_.advertiseCamera("/stereo_forward/right/image_raw", 1);
@@ -110,8 +124,6 @@ void StereoCamera::run() {
   right_info_man_ = std::shared_ptr<camera_info_manager::CameraInfoManager>(new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),"right_optical", right_camera_info_url_));
 
   // Bind the callbacks with the cameras
-  //std::function<void(pg_spinnaker_camera::StereoCamera&)> leftFrameThreadCaller = &pg_spinnaker_camera::StereoCamera::leftFrameThread;
-  //std::function<void(pg_spinnaker_camera::StereoCamera&)> rightFrameThreadCaller = &pg_spinnaker_camera::StereoCamera::rightFrameThread;
   l_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::leftFrameThread, this));
   r_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::rightFrameThread, this));
 }
