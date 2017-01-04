@@ -1,0 +1,12 @@
+<launch>
+  <arg name="left_serial" default="16401228"/>
+  <arg name="right_serial" default="16401229"/>
+  <arg name="calibration" default="water"/>
+  <node pkg="pg_spinnaker_camera" type="pg_stereo_camera" name="pg_stereo_camera" respawn="false" output="screen" >
+    <rosparam command="load" file="$(find turbot)/config/chameleon3.yaml"/>
+    <param name="left_serial_number" value="$(arg left_serial)"/>
+    <param name="right_serial_number" value="$(arg right_serial)" />
+    <param name="left_camera_info_url" value="file://$(find turbot)/cameras/CM3-U3-31S4C_$(arg left_serial)/calibration_$(arg calibration).yaml" />
+    <param name="right_camera_info_url" value="file://$(find turbot)/cameras/CM3-U3-31S4C_$(arg right_serial)/calibration_$(arg calibration).yaml"/>
+  </node>
+</launch>
