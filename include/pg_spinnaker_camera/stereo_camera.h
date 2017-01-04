@@ -88,8 +88,8 @@ class StereoCameraConfig {
   bool saturation_enabled;
   std::string saturation_auto;
   std::string balance_white_auto;
-  int balance_ratio_red;
-  int balance_ratio_blue;
+  float balance_ratio_red;
+  float balance_ratio_blue;
 };
 
 class StereoCamera {

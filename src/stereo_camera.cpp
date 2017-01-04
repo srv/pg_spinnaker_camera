@@ -115,6 +115,10 @@ StereoCamera::~StereoCamera() {
 
 void StereoCamera::run() {
   if (!l_cam_->IsConnected() && !r_cam_->IsConnected()) return;
+  // End camera acquisition just in case...
+  //l_cam_->End();
+  //r_cam_->End();
+
   // Set the image publishers before the streaming
   left_pub_  = it_.advertiseCamera("/stereo_forward/left/image_raw",  1);
   right_pub_ = it_.advertiseCamera("/stereo_forward/right/image_raw", 1);
@@ -126,58 +130,72 @@ void StereoCamera::run() {
   // Bind the callbacks with the cameras
   l_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::leftFrameThread, this));
   r_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::rightFrameThread, this));
+
+  // Start camera acquisition
+  l_cam_->Start();
+  r_cam_->Start();
 }
 
 void StereoCamera::leftFrameThread() {
+  std::cout << "LEFT THREAD " << left_counter_ << std::endl;
   cv::Mat left_img = l_cam_->GrabNextImage();
 
   if (left_img.rows > 0) {
-    // Setup header
-    std_msgs::Header header;
-    header.seq = left_counter_;
-    header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
+    if (left_pub_.getNumSubscribers() > 0) {
+      // Setup header
+      std_msgs::Header header;
+      header.seq = left_counter_;
+      header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
 
-    // Setup image
-    sensor_msgs::Image img_msg;
-    cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_GBRG8, left_img);
-    img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
+      // Setup image
+      sensor_msgs::Image img_msg;
+      cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, left_img);
+      img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
 
-    // Camera info
-    sensor_msgs::CameraInfo ci = left_info_man_->getCameraInfo();
-    ci.header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
+      // Camera info
+      sensor_msgs::CameraInfo ci = left_info_man_->getCameraInfo();
+      ci.header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
 
-    // Set frame_id
-    img_msg.header.frame_id = ci.header.frame_id;
-    // Publish
-    left_pub_.publish(img_msg, ci);
-    left_counter_++;
+      // Set frame_id
+      img_msg.header.frame_id = ci.header.frame_id;
+      // Publish
+      left_pub_.publish(img_msg, ci);
+    }
+  } else {
+    std::cout << "[ERROR]: LEFT image incomplete " << std::endl;
   }
+  left_counter_++;
 }
 
 void StereoCamera::rightFrameThread() {
+  std::cout << "RIGHT THREAD " << right_counter_ << std::endl;
   cv::Mat right_img = r_cam_->GrabNextImage();
 
   if (right_img.rows > 0) {
-    // Setup header
-    std_msgs::Header header;
-    header.seq = right_counter_;
-    header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
+    if (right_pub_.getNumSubscribers() > 0) {
+      // Setup header
+      std_msgs::Header header;
+      header.seq = right_counter_;
+      header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
 
-    // Setup image
-    sensor_msgs::Image img_msg;
-    cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_GBRG8, right_img);
-    img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
+      // Setup image
+      sensor_msgs::Image img_msg;
+      cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, right_img);
+      img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
 
-    // Camera info
-    sensor_msgs::CameraInfo ci = right_info_man_->getCameraInfo();
-    ci.header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
+      // Camera info
+      sensor_msgs::CameraInfo ci = right_info_man_->getCameraInfo();
+      ci.header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
 
-    // Set frame_id
-    img_msg.header.frame_id = ci.header.frame_id;
-    // Publish
-    right_pub_.publish(img_msg, ci);
-    right_counter_++;
+      // Set frame_id
+      img_msg.header.frame_id = ci.header.frame_id;
+      // Publish
+      right_pub_.publish(img_msg, ci);
+    }
+  } else {
+    std::cout << "[ERROR]: RIGHT image incomplete " << std::endl;
   }
+  right_counter_++;
 }
 
 void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
@@ -190,14 +208,19 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("BinningVertical", config_.binning_vertical);
   cam->set("DecimationVertical", config_.decimation_vertical);
   cam->set("PixelFormat", config_.pixel_format);
-  cam->set("PixelCoding", config_.pixel_coding);
+  // cam->set("PixelCoding", config_.pixel_coding);
   cam->set("VideoMode", config_.video_mode);
 
   if(is_left) {
     // Set strobe (LEFT CAMERA ONLY)
+    // and AcquisitionFrameRate (only if Trigger Mode is Off)
     cam->set("LineSelector", config_.line_selector);
     cam->set("LineMode", config_.line_mode);
     cam->set("LineSource", config_.line_source);
+    cam->set("TriggerMode", std::string("Off"));
+    cam->set("AcquisitionFrameRateAuto", config_.acquisition_frame_rate_auto);
+    cam->set("AcquisitionFrameRateEnabled", config_.acquisition_frame_rate_enabled);
+    cam->set("AcquisitionFrameRate", config_.acquisition_frame_rate);
   } else {
     // Trigger (Must be switched off to change source!)
     // (RIGHT CAMERA ONLY)
@@ -207,19 +230,19 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
     cam->set("TriggerSelector", config_.trigger_selector);
     cam->set("TriggerActivation", config_.trigger_activation);
   }
-
-  cam->set("AcquisitionFrameRateAuto", config_.acquisition_frame_rate_auto);
-  cam->set("AcquisitionFrameRateEnabled", config_.acquisition_frame_rate_enabled);
-  cam->set("AcquisitionFrameRate", config_.acquisition_frame_rate);
-  cam->set("ExposureAuto", config_.exposure_auto);
+  cam->set("ExposureMode", std::string("Timed"));
   cam->set("ExposureTime", config_.exposure_time);
-  cam->set("AutoExposureExposureTimeUpperLimit", config_.auto_exposure_exposure_time_upper_limit);
+  cam->set("AutoExposureTimeUpperLimit", config_.auto_exposure_exposure_time_upper_limit);
+  cam->set("ExposureAuto", config_.exposure_auto);
   cam->set("Gain", config_.gain);
-  cam->set("GainAuto", config_.gain_auto);
   cam->set("AutoGainLowerLimit", config_.auto_gain_lower_limit);
   cam->set("AutoGainUpperLimit", config_.auto_gain_upper_limit);
+  cam->set("GainAuto", config_.gain_auto);
   cam->set("BlackLevel", config_.black_level);
-  cam->set("BlackLevelAuto", config_.black_level_auto);
+
+  // cam->set("BlackLevelAuto", config_.black_level_auto);  // Not implemented
+
+  /*
   cam->set("Gamma", config_.gamma);
   cam->set("GammaEnabled", config_.gamma_enabled);
   cam->set("Sharpness", config_.sharpness);
@@ -231,17 +254,18 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("Saturation", config_.saturation);
   cam->set("SaturationEnabled", config_.saturation_enabled);
   cam->set("SaturationAuto", config_.saturation_auto);
+  */
+
+  /* No sense if on RAW mode...
   cam->set("BalanceWhiteAuto", config_.balance_white_auto);
   cam->set("BalanceRatioSelector", std::string("Red"));
   cam->set("BalanceRatio", config_.balance_ratio_red);
   cam->set("BalanceRatioSelector", std::string("Blue"));
   cam->set("BalanceRatio", config_.balance_ratio_blue);
+  */
 
   // Select the Exposure End event
   cam->SetExposureEndEvent();
-
-  // Start camera acquisition
-  cam->Start();
 }
 
 

@@ -88,6 +88,10 @@ public:
 	bool set(const std::string &property_name, const std::string &entry_name) {
 		std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
 		Spinnaker::GenApi::CEnumerationPtr enumerationPtr = node_map_->GetNode(property_name.c_str());
+		if (!Spinnaker::GenApi::IsImplemented(enumerationPtr)) {
+			std::cout << "[ERROR]: (" << serial_ << ")  Enumeration name " << property_name << " not implemented" << std::endl;
+			return false;
+		}
 		if (Spinnaker::GenApi::IsAvailable(enumerationPtr)) {
 			if (Spinnaker::GenApi::IsWritable(enumerationPtr)) {
 				Spinnaker::GenApi::CEnumEntryPtr enumEmtryPtr = enumerationPtr->GetEntryByName(entry_name.c_str());
@@ -113,6 +117,10 @@ public:
 	bool set(const std::string &property_name, const float &value) {
 		std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
 		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode(property_name.c_str());
+		if (!Spinnaker::GenApi::IsImplemented(floatPtr)) {
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			return false;
+		}
 		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
 			if (Spinnaker::GenApi::IsWritable(floatPtr)) {
 				floatPtr->SetValue(value);
@@ -129,6 +137,10 @@ public:
 	bool set(const std::string &property_name, const bool &value) {
 		std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
 		Spinnaker::GenApi::CBooleanPtr boolPtr = node_map_->GetNode(property_name.c_str());
+		if (!Spinnaker::GenApi::IsImplemented(boolPtr)) {
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			return false;
+		}
 		if (Spinnaker::GenApi::IsAvailable(boolPtr)) {
 			if (Spinnaker::GenApi::IsWritable(boolPtr)) {
 				boolPtr->SetValue(value);
@@ -145,6 +157,10 @@ public:
 	bool set(const std::string &property_name, const int &value) {
 		std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
+		if (!Spinnaker::GenApi::IsImplemented(intPtr)) {
+			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			return false;
+		}
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
 			if (Spinnaker::GenApi::IsWritable(intPtr)) {
 				intPtr->SetValue(value);
@@ -471,13 +487,12 @@ public:
 				std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 		image_timestamp_ = image_ptr->GetTimeStamp();
 
+		cv::Mat result;
 		if (image_ptr->IsIncomplete()) {
 			std::cout << "[ERROR]: (" << serial_ << ")  Received and incomplete image " << std::endl;
-			return cv::Mat();
 		} else {
 			int width = image_ptr->GetWidth();
 			int height = image_ptr->GetHeight();
-			cv::Mat result;
 			if (format == "bgr") {
 				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8);
 				cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
@@ -492,9 +507,9 @@ public:
 			} else {
 				throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
 			}
-			image_ptr->Release();
-			return result;
 		}
+		image_ptr->Release();
+		return result;
 	}
 
 	void TriggerSoftwareExecute() {
