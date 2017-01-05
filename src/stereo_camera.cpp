@@ -52,7 +52,7 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("binning_vertical", config_.binning_vertical);
   nhp_.getParam("decimation_vertical", config_.decimation_vertical);
   nhp_.getParam("pixel_format", config_.pixel_format);
-  nhp_.getParam("pixel_coding", config_.pixel_coding);
+  nhp_.getParam("pixel_size", config_.pixel_size);
   nhp_.getParam("video_mode", config_.video_mode);
   nhp_.getParam("line_selector", config_.line_selector);
   nhp_.getParam("line_mode", config_.line_mode);
@@ -70,22 +70,14 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("gain_auto", config_.gain_auto);
   nhp_.getParam("auto_gain_lower_limit", config_.auto_gain_lower_limit);
   nhp_.getParam("auto_gain_upper_limit", config_.auto_gain_upper_limit);
-  nhp_.getParam("black_level", config_.black_level);
-  nhp_.getParam("black_level_auto", config_.black_level_auto);
-  nhp_.getParam("gamma", config_.gamma);
-  nhp_.getParam("gamma_enabled", config_.gamma_enabled);
-  nhp_.getParam("sharpness", config_.sharpness);
-  nhp_.getParam("sharpness_enabled", config_.sharpness_enabled);
-  nhp_.getParam("sharpness_auto", config_.sharpness_auto);
-  nhp_.getParam("hue", config_.hue);
-  nhp_.getParam("hue_enabled", config_.hue_enabled);
-  nhp_.getParam("hue_auto", config_.hue_auto);
-  nhp_.getParam("saturation", config_.saturation);
-  nhp_.getParam("saturation_enabled", config_.saturation_enabled);
-  nhp_.getParam("saturation_auto", config_.saturation_auto);
   nhp_.getParam("balance_white_auto", config_.balance_white_auto);
   nhp_.getParam("balance_ratio_red", config_.balance_ratio_red);
   nhp_.getParam("balance_ratio_blue", config_.balance_ratio_blue);
+  nhp_.getParam("black_level", config_.black_level);
+  nhp_.getParam("gamma", config_.gamma);
+  nhp_.getParam("sharpness", config_.sharpness);
+  nhp_.getParam("hue", config_.hue);
+  nhp_.getParam("saturation", config_.saturation);
 
   l_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(left_serial_number_));
   r_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(right_serial_number_));
@@ -104,7 +96,7 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   }
 }
 
-StereoCamera::~StereoCamera() {
+void StereoCamera::stop() {
   if (l_cam_) {
     l_cam_->End();
   }
@@ -137,6 +129,8 @@ void StereoCamera::run() {
 }
 
 void StereoCamera::leftFrameThread() {
+  std::lock_guard<std::mutex> lock(left_mutex_);
+
   std::cout << "LEFT THREAD " << left_counter_ << std::endl;
   cv::Mat left_img = l_cam_->GrabNextImage();
 
@@ -168,6 +162,8 @@ void StereoCamera::leftFrameThread() {
 }
 
 void StereoCamera::rightFrameThread() {
+  std::lock_guard<std::mutex> lock(right_mutex_);
+
   std::cout << "RIGHT THREAD " << right_counter_ << std::endl;
   cv::Mat right_img = r_cam_->GrabNextImage();
 
@@ -208,7 +204,7 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("BinningVertical", config_.binning_vertical);
   cam->set("DecimationVertical", config_.decimation_vertical);
   cam->set("PixelFormat", config_.pixel_format);
-  // cam->set("PixelCoding", config_.pixel_coding);
+  cam->set("PixelSize", config_.pixel_size);
   cam->set("VideoMode", config_.video_mode);
 
   if(is_left) {
@@ -242,19 +238,10 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
 
   // cam->set("BlackLevelAuto", config_.black_level_auto);  // Not implemented
 
-  /*
   cam->set("Gamma", config_.gamma);
-  cam->set("GammaEnabled", config_.gamma_enabled);
   cam->set("Sharpness", config_.sharpness);
-  cam->set("SharpnessEnabled", config_.sharpness_enabled);
-  cam->set("SharpnessAuto", config_.sharpness_auto);
   cam->set("Hue", config_.hue);
-  cam->set("HueEnabled", config_.hue_enabled);
-  cam->set("HueAuto", config_.hue_auto);
   cam->set("Saturation", config_.saturation);
-  cam->set("SaturationEnabled", config_.saturation_enabled);
-  cam->set("SaturationAuto", config_.saturation_auto);
-  */
 
   /* No sense if on RAW mode...
   cam->set("BalanceWhiteAuto", config_.balance_white_auto);

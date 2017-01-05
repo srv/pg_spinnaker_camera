@@ -8,7 +8,6 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
-#include <mutex>
 #include <sys/stat.h>
 
 enum Lines {
@@ -28,7 +27,6 @@ public:
 		~DeviceEventHandler(){};
 		// Once Exposure End Event is detected, the OnDeviceEvent function will be called
 		void OnDeviceEvent(Spinnaker::GenICam::gcstring eventName) {
-			std::cout << "Event " << eventName << std::endl;
 			std::thread t(cam_->callback_);
 			t.detach();
 		}
@@ -52,11 +50,11 @@ public:
 	}
 
 	~SpinnakerCamera() {
+		std::cout << "[INFO]:  (" << serial_ << ") Destructor called" << std::endl;
+		if (cam_ptr_) End();
+		// Clear camera list before releasing system
 		camList_.Clear();
-		cam_ptr_->UnregisterEvent(*event_handler_);
-		// Delete device event (because it is a pointer)
-		delete event_handler_;
-		if (cam_ptr_) cam_ptr_->DeInit();
+    // Release system
 		system_->ReleaseInstance();
 	}
 
@@ -86,7 +84,17 @@ public:
 	}
 
 	bool set(const std::string &property_name, const std::string &entry_name) {
-		std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
+		// *** NOTES ***
+		// Enumeration nodes are slightly more complicated to set than other
+		// nodes. This is because setting an enumeration node requires working
+		// with two nodes instead of the usual one.
+		//
+		// As such, there are a number of steps to setting an enumeration node:
+		// retrieve the enumeration node from the nodemap, retrieve the desired
+		// entry node from the enumeration node, retrieve the integer value from
+		// the entry node, and set the new value of the enumeration node with
+		// the integer value from the entry node.
+		// std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
 		Spinnaker::GenApi::CEnumerationPtr enumerationPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(enumerationPtr)) {
 			std::cout << "[ERROR]: (" << serial_ << ")  Enumeration name " << property_name << " not implemented" << std::endl;
@@ -98,6 +106,7 @@ public:
 				if (Spinnaker::GenApi::IsAvailable(enumEmtryPtr)) {
 					if (Spinnaker::GenApi::IsReadable(enumEmtryPtr)) {
 						enumerationPtr->SetIntValue(enumEmtryPtr->GetValue());
+						std::cout << "[INFO]: " << property_name << " set to " << enumerationPtr->GetCurrentEntry()->GetSymbolic() << "..." << std::endl;
 						return true;
 					} else {
 						std::cout << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not writable" << std::endl;
@@ -115,7 +124,7 @@ public:
 	}
 
 	bool set(const std::string &property_name, const float &value) {
-		std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
+		// std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
 		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(floatPtr)) {
 			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
@@ -124,6 +133,7 @@ public:
 		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
 			if (Spinnaker::GenApi::IsWritable(floatPtr)) {
 				floatPtr->SetValue(value);
+				std::cout << "[INFO]: " << property_name << " set to " << floatPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
 				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
@@ -135,7 +145,7 @@ public:
 	}
 
 	bool set(const std::string &property_name, const bool &value) {
-		std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
+		// std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
 		Spinnaker::GenApi::CBooleanPtr boolPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(boolPtr)) {
 			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
@@ -144,6 +154,7 @@ public:
 		if (Spinnaker::GenApi::IsAvailable(boolPtr)) {
 			if (Spinnaker::GenApi::IsWritable(boolPtr)) {
 				boolPtr->SetValue(value);
+				std::cout << "[INFO]: " << property_name << " set to " << boolPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
 				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
@@ -155,7 +166,7 @@ public:
 	}
 
 	bool set(const std::string &property_name, const int &value) {
-		std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
+		// std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(intPtr)) {
 			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
@@ -164,6 +175,7 @@ public:
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
 			if (Spinnaker::GenApi::IsWritable(intPtr)) {
 				intPtr->SetValue(value);
+				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
 				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
@@ -178,8 +190,9 @@ public:
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
 			if (Spinnaker::GenApi::IsWritable(intPtr)) {
-				std::cout << "Setting " << property_name << " to " << intPtr->GetMax() << " (int)" << std::endl;
+				// std::cout << "Setting " << property_name << " to " << intPtr->GetMax() << " (int)" << std::endl;
 				intPtr->SetValue(intPtr->GetMax());
+				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
 				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
@@ -245,7 +258,23 @@ public:
 	}
 
 	void End() {
-		cam_ptr_->EndAcquisition();
+		std::cout << "[INFO]:  (" << serial_ << ") Camera end called" << std::endl;
+		// Select the Exposure End event
+		set("EventSelector", std::string("ExposureEnd"));
+		// Turn on the Event notification for Exposure End Event
+		set("EventNotification", std::string("Off"));
+		try {
+			cam_ptr_->UnregisterEvent(*event_handler_);
+			delete event_handler_;
+      std::cout << "[INFO]:  (" << serial_ << ") Device event handler unregistered" << std::endl;
+			cam_ptr_->EndAcquisition();
+      std::cout << "[INFO]:  (" << serial_ << ") Acquisition stopped" << std::endl;
+      cam_ptr_->DeInit();
+      std::cout << "[INFO]:  (" << serial_ << ") DeInit" << std::endl;
+		} catch (Spinnaker::Exception &e) {
+      std::cout << "Error: " << e.what() << std::endl;
+    }
+    delete cam_ptr_;
 	}
 
 	void SetPixelFormat(int format = BAYER_RG8) {
@@ -481,8 +510,10 @@ public:
 	}
 
 	// Grab Next Image
-	cv::Mat GrabNextImage(const std::string &format = "bayer") {
+	cv::Mat GrabNextImage() {
 		Spinnaker::ImagePtr image_ptr = cam_ptr_->GetNextImage();
+		std::string format(image_ptr->GetPixelFormatName());
+
 		system_timestamp_ = std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 		image_timestamp_ = image_ptr->GetTimeStamp();
@@ -493,19 +524,20 @@ public:
 		} else {
 			int width = image_ptr->GetWidth();
 			int height = image_ptr->GetHeight();
-			if (format == "bgr") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8);
+			if (format == "RGB8") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
 				cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
-				result = temp_img.clone();
-			} else if (format == "bayer") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BayerRG8);
-				return cv::Mat(height, width, CV_8UC1, converted_image_ptr->GetData());
-			} else if (format == "mono") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8);
+				result = temp_img;
+			} else if (format == "BayerRG8") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
+				cv::Mat temp_img(height, width, CV_8UC1, image_ptr->GetData());
+				result = temp_img;
+			} else if (format == "Mono8") {
+				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
 				cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
-				result = temp_img.clone();
+				result = temp_img;
 			} else {
-				throw std::invalid_argument("Invalid argument: format = " + format + ". Expected bgr, rgr, or gray.");
+				throw std::invalid_argument("Invalid image format = " + format + ". Expected RGB8, BayerRG8, or Mono8.");
 			}
 		}
 		image_ptr->Release();

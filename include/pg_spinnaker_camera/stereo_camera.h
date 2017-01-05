@@ -56,7 +56,7 @@ class StereoCameraConfig {
   int binning_vertical;
   int decimation_vertical;
   std::string pixel_format;
-  std::string pixel_coding;
+  std::string pixel_size;
   std::string video_mode;
   std::string line_selector;
   std::string line_mode;
@@ -74,29 +74,21 @@ class StereoCameraConfig {
   std::string gain_auto;
   float auto_gain_lower_limit;
   float auto_gain_upper_limit;
-  float black_level;
-  std::string black_level_auto;
-  float gamma;
-  bool gamma_enabled;
-  float sharpness;
-  bool sharpness_enabled;
-  std::string sharpness_auto;
-  float hue;
-  bool hue_enabled;
-  std::string hue_auto;
-  float saturation;
-  bool saturation_enabled;
-  std::string saturation_auto;
   std::string balance_white_auto;
   float balance_ratio_red;
   float balance_ratio_blue;
+float black_level;
+  float gamma;
+  float sharpness;
+  float hue;
+  float saturation;
 };
 
 class StereoCamera {
  public:
   StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp);
-  ~StereoCamera();
   void run();
+  void stop();
 
  private:
 
@@ -128,6 +120,9 @@ class StereoCamera {
 
   std::shared_ptr<camera_info_manager::CameraInfoManager> left_info_man_;
   std::shared_ptr<camera_info_manager::CameraInfoManager> right_info_man_;
+
+  std::mutex left_mutex_;
+  std::mutex right_mutex_;
 
   void leftFrameThread();
   void rightFrameThread();

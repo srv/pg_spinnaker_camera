@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include <boost/thread.hpp>
+#include <thread>
 #include <pg_spinnaker_camera/stereo_camera.h>
 
 int main(int argc, char** argv)
@@ -10,13 +10,12 @@ int main(int argc, char** argv)
   ros::NodeHandle nhp("~");
 
   pg_spinnaker_camera::StereoCamera sc(nh,nhp);
-  boost::thread stereoThread(&pg_spinnaker_camera::StereoCamera::run, &sc);
+  sc.run();
 
   // ROS spin
-  ros::Rate r(10);
-  while (ros::ok())
-    r.sleep();
-  ros::shutdown();
+  ros::MultiThreadedSpinner spinner(2); // Use 2 threads
+  spinner.spin(); // spin() will not return until the node has been shut down
 
+  sc.stop();
   return 0;
 }
