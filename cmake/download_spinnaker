@@ -56,7 +56,7 @@ ARCHS = {
 archive_url, folder_name, shared_library = ARCHS[sys.argv[1]]
 destination_folder = sys.argv[2]
 
-if not os.path.exists(os.path.join(os.getcwd(), folder_name)):
+if not os.path.exists(os.path.join(os.getcwd(), "usr/lib/")):
     logging.info("Logging into ptgrey.com.")
     cj = cookielib.CookieJar()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
@@ -72,20 +72,20 @@ if not os.path.exists(os.path.join(os.getcwd(), folder_name)):
     with tarfile.open(mode="r:gz", fileobj=cStringIO.StringIO(resp.read())) as tar:
         tar.extractall()
 
-if not os.path.exists(os.path.join(os.getcwd(), "usr")):
-    os.mkdir(os.path.join(os.getcwd(), "usr"))
+    if not os.path.exists(os.path.join(os.getcwd(), "usr")):
+        os.mkdir(os.path.join(os.getcwd(), "usr"))
 
-# For every folder/file, copy it into the /usr folder we just created.
-for filename in os.listdir(os.path.join(os.getcwd(), folder_name)):
-    if not os.path.exists(os.path.join(os.getcwd(), "usr/", filename)):
-        shutil.copy(os.path.join(os.getcwd(), folder_name, filename), os.path.join(os.getcwd(), "usr/", filename))
+    # For every folder/file, copy it into the /usr folder we just created.
+    for filename in os.listdir(os.path.join(os.getcwd(), folder_name)):
+        if not os.path.exists(os.path.join(os.getcwd(), "usr/", filename)):
+            shutil.move(os.path.join(os.getcwd(), folder_name, filename), os.path.join(os.getcwd(), "usr/", filename))
 
-# now we do some thing for XML files; copy them next to the catkin binary
-xml_path = os.path.join(os.getcwd(), "usr/bin")
-xml_files = os.listdir(xml_path)
+    # now we do some thing for XML files; copy them next to the catkin binary
+    xml_path = os.path.join(os.getcwd(), "usr/bin")
+    xml_files = os.listdir(xml_path)
 
-for files in xml_files:
-    if files.endswith(".xml"):
-        origin_file = os.path.join(xml_path, files)
-        print('Copying ' + origin_file + ' to ' + destination_folder)
-        shutil.copy(origin_file, destination_folder)
+    for files in xml_files:
+        if files.endswith(".xml"):
+            origin_file = os.path.join(xml_path, files)
+            print('Copying ' + origin_file + ' to ' + destination_folder)
+            shutil.copy(origin_file, destination_folder)

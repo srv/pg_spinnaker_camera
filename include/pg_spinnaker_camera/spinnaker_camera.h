@@ -8,6 +8,7 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
+#include <mutex>
 #include <sys/stat.h>
 
 enum Lines {
@@ -258,6 +259,7 @@ public:
 	}
 
 	void End() {
+		std::lock_guard<std::mutex> lock(mutex_);
 		std::cout << "[INFO]:  (" << serial_ << ") Camera end called" << std::endl;
 		// Select the Exposure End event
 		set("EventSelector", std::string("ExposureEnd"));
@@ -511,6 +513,7 @@ public:
 
 	// Grab Next Image
 	cv::Mat GrabNextImage() {
+		std::lock_guard<std::mutex> lock(mutex_);
 		Spinnaker::ImagePtr image_ptr = cam_ptr_->GetNextImage();
 		std::string format(image_ptr->GetPixelFormatName());
 
@@ -566,4 +569,5 @@ private:
 	uint64_t system_timestamp_;
 	uint64_t image_timestamp_;
 	std::string serial_;
+	std::mutex mutex_;
 };
