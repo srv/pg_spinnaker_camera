@@ -35,7 +35,7 @@ public:
 	 	SpinnakerCamera* cam_;
 	};
 
-	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler(this)), serial_(serial_number) {
+	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler(this)), serial_(serial_number), is_end_(false){
 		system_ = Spinnaker::System::GetInstance();
 		camList_ = system_->GetCameras();
 		unsigned int numCameras = camList_.GetSize();
@@ -276,7 +276,7 @@ public:
 		} catch (Spinnaker::Exception &e) {
       std::cout << "Error: " << e.what() << std::endl;
     }
-    delete cam_ptr_;
+		is_end_ = true;
 	}
 
 	void SetPixelFormat(int format = BAYER_RG8) {
@@ -514,6 +514,8 @@ public:
 	// Grab Next Image
 	cv::Mat GrabNextImage() {
 		std::lock_guard<std::mutex> lock(mutex_);
+		if (is_end_) return cv::Mat();
+
 		Spinnaker::ImagePtr image_ptr = cam_ptr_->GetNextImage();
 		std::string format(image_ptr->GetPixelFormatName());
 
@@ -570,4 +572,5 @@ private:
 	uint64_t image_timestamp_;
 	std::string serial_;
 	std::mutex mutex_;
+	bool is_end_;
 };
