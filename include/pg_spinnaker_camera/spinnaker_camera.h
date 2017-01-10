@@ -37,10 +37,10 @@ public:
 
 	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler(this)), serial_(serial_number), is_end_(false){
 		system_ = Spinnaker::System::GetInstance();
-		camList_ = system_->GetCameras();
-		unsigned int numCameras = camList_.GetSize();
-		std::cout << "Number of cameras detected: " << numCameras << std::endl << std::endl;
-		cam_ptr_ = camList_.GetBySerial(serial_number);
+		cam_list_ = system_->GetCameras();
+		unsigned int num_cameras = cam_list_.GetSize();
+		std::cout << "Number of cameras detected: " << num_cameras << std::endl << std::endl;
+		cam_ptr_ = cam_list_.GetBySerial(serial_number);
 		if (cam_ptr_) {
 			cam_ptr_->Init();
 			node_map_ = &cam_ptr_->GetNodeMap();
@@ -53,8 +53,9 @@ public:
 	~SpinnakerCamera() {
 		std::cout << "[INFO]:  (" << serial_ << ") Destructor called" << std::endl;
 		if (cam_ptr_) End();
+
 		// Clear camera list before releasing system
-		camList_.Clear();
+		cam_list_.Clear();
     // Release system
 		system_->ReleaseInstance();
 	}
@@ -254,20 +255,23 @@ public:
 
 	// Start/End camera
 	void Start() {
+		is_end_ = false;
 		set("AcquisitionMode", std::string("Continuous"));
 		cam_ptr_->BeginAcquisition();
 	}
 
 	void End() {
 		std::lock_guard<std::mutex> lock(mutex_);
+		is_end_ = true;
+
 		std::cout << "[INFO]:  (" << serial_ << ") Camera end called" << std::endl;
 		// Select the Exposure End event
-		set("EventSelector", std::string("ExposureEnd"));
+		//set("EventSelector", std::string("ExposureEnd"));
 		// Turn on the Event notification for Exposure End Event
-		set("EventNotification", std::string("Off"));
+		//set("EventNotification", std::string("Off"));
 		try {
-			cam_ptr_->UnregisterEvent(*event_handler_);
-			delete event_handler_;
+			//cam_ptr_->UnregisterEvent(*event_handler_);
+			//delete event_handler_;
       std::cout << "[INFO]:  (" << serial_ << ") Device event handler unregistered" << std::endl;
 			cam_ptr_->EndAcquisition();
       std::cout << "[INFO]:  (" << serial_ << ") Acquisition stopped" << std::endl;
@@ -276,7 +280,7 @@ public:
 		} catch (Spinnaker::Exception &e) {
       std::cout << "Error: " << e.what() << std::endl;
     }
-		is_end_ = true;
+    delete cam_ptr_;
 	}
 
 	void SetPixelFormat(int format = BAYER_RG8) {
@@ -529,20 +533,13 @@ public:
 		} else {
 			int width = image_ptr->GetWidth();
 			int height = image_ptr->GetHeight();
-			if (format == "RGB8") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_BGR8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
-				cv::Mat temp_img(height, width, CV_8UC3, converted_image_ptr->GetData());
-				result = temp_img;
-			} else if (format == "BayerRG8") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
+
+			if (format == "BayerRG8") {
 				cv::Mat temp_img(height, width, CV_8UC1, image_ptr->GetData());
 				result = temp_img;
-			} else if (format == "Mono8") {
-				Spinnaker::ImagePtr converted_image_ptr = image_ptr->Convert(Spinnaker::PixelFormatEnums::PixelFormat_Mono8, Spinnaker::ColorProcessingAlgorithm::HQ_LINEAR);
-				cv::Mat temp_img(height, width, CV_8UC1, converted_image_ptr->GetData());
-				result = temp_img;
 			} else {
-				throw std::invalid_argument("Invalid image format = " + format + ". Expected RGB8, BayerRG8, or Mono8.");
+				std::cout << "Invalid image format." << std::endl;
+				//throw std::invalid_argument("Invalid image format = " + format + ". BayerRG8.");
 			}
 		}
 		image_ptr->Release();
@@ -565,7 +562,7 @@ private:
 	Spinnaker::CameraPtr cam_ptr_;
 	Spinnaker::GenApi::INodeMap *node_map_;
 	Spinnaker::SystemPtr system_;
-	Spinnaker::CameraList camList_;
+	Spinnaker::CameraList cam_list_;
 	DeviceEventHandler* event_handler_;
 	std::function<void (void)> callback_;
 	uint64_t system_timestamp_;

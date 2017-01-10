@@ -77,7 +77,7 @@ class StereoCameraConfig {
   std::string balance_white_auto;
   float balance_ratio_red;
   float balance_ratio_blue;
-float black_level;
+  float black_level;
   float gamma;
   float sharpness;
   float hue;
@@ -121,8 +121,13 @@ class StereoCamera {
   std::shared_ptr<camera_info_manager::CameraInfoManager> left_info_man_;
   std::shared_ptr<camera_info_manager::CameraInfoManager> right_info_man_;
 
-  std::mutex left_mutex_;
-  std::mutex right_mutex_;
+  // Sync
+  std::vector<sensor_msgs::Image> r_imgs_buffer_;
+  std::vector<sensor_msgs::Image> l_imgs_buffer_;
+  int imgs_buffer_size_;
+  std::mutex l_sync_mutex_;
+  std::mutex r_sync_mutex_;
+  double max_sec_diff_;
 
   void leftFrameThread();
   void rightFrameThread();

@@ -37,14 +37,20 @@
 namespace pg_spinnaker_camera {
 
 StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
-: l_cam_(NULL), r_cam_(NULL), left_counter_(0), right_counter_(0), nh_(nh), nhp_(nhp), it_(nh) {
+: l_cam_(NULL), r_cam_(NULL), left_counter_(0), right_counter_(0),
+  nh_(nh), nhp_(nhp), it_(nh) {
 
-  // Get the parameters
+  // Camera info
   nhp_.param("left_serial_number", left_serial_number_, std::string("16401228"));
   nhp_.param("right_serial_number", right_serial_number_, std::string("16401229"));
   nhp_.param("left_camera_info_url", left_camera_info_url_, std::string(""));
   nhp_.param("right_camera_info_url", right_camera_info_url_, std::string(""));
 
+  // Sync
+  nhp_.param("imgs_buffer_size", imgs_buffer_size_, 2);
+  nhp_.param("max_sec_diff", max_sec_diff_, 0.05);
+
+  // Camera config
   nhp_.getParam("width", config_.width);
   nhp_.getParam("height", config_.height);
   nhp_.getParam("offset_x", config_.offset_x);
@@ -120,18 +126,24 @@ void StereoCamera::run() {
   right_info_man_ = std::shared_ptr<camera_info_manager::CameraInfoManager>(new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),"right_optical", right_camera_info_url_));
 
   // Bind the callbacks with the cameras
-  l_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::leftFrameThread, this));
-  r_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::rightFrameThread, this));
+  //l_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::leftFrameThread, this));
+  //r_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::rightFrameThread, this));
 
   // Start camera acquisition
   l_cam_->Start();
   r_cam_->Start();
+
+  // Start threads
+  std::thread thread_left(&StereoCamera::leftFrameThread, this);
+  std::thread thread_right(&StereoCamera::rightFrameThread, this);
+  thread_left.join();
+  thread_right.join();
 }
 
 void StereoCamera::leftFrameThread() {
-  std::lock_guard<std::mutex> lock(left_mutex_);
 
   std::cout << "LEFT THREAD " << left_counter_ << std::endl;
+  ros::Time ros_time = ros::Time::now();
   cv::Mat left_img = l_cam_->GrabNextImage();
 
   if (left_img.rows > 0) {
@@ -139,21 +151,58 @@ void StereoCamera::leftFrameThread() {
       // Setup header
       std_msgs::Header header;
       header.seq = left_counter_;
-      header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
+      header.stamp = ros_time;
 
       // Setup image
-      sensor_msgs::Image img_msg;
+      sensor_msgs::Image img;
       cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, left_img);
-      img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
+      img_bridge.toImageMsg(img);
 
       // Camera info
-      sensor_msgs::CameraInfo ci = left_info_man_->getCameraInfo();
-      ci.header.stamp = ros::Time::now();  //l_cam_->GetImageTimestamp();
+      sensor_msgs::CameraInfo lci = left_info_man_->getCameraInfo();
+      lci.header.stamp = ros_time;
+      img.header.frame_id = lci.header.frame_id;
 
-      // Set frame_id
-      img_msg.header.frame_id = ci.header.frame_id;
       // Publish
-      left_pub_.publish(img_msg, ci);
+      if (right_pub_.getNumSubscribers() == 0) {
+        // No right subscribers
+        left_pub_.publish(img, lci);
+      } else {
+        // Right sync
+        std::lock_guard<std::mutex> lock(r_sync_mutex_);
+
+        // Search a time coincidence with right
+        int idx_r = -1;
+        for (uint i=0; i<r_imgs_buffer_.size(); i++) {
+          double r_stamp = r_imgs_buffer_[i].header.stamp.toSec();
+          if (fabs(r_stamp - ros_time.toSec()) < max_sec_diff_) {
+            idx_r = (int)i;
+            break;
+          }
+        }
+        if (idx_r >= 0) {
+          // Get the corresponding right image
+          sensor_msgs::Image r_img = r_imgs_buffer_[idx_r];
+
+          // Publish left/right
+          sensor_msgs::CameraInfo rci = right_info_man_->getCameraInfo();
+          r_img.header.stamp = ros_time;
+          lci.header.stamp = ros_time;
+          rci.header.stamp = ros_time;
+          left_pub_.publish(img, lci);
+          right_pub_.publish(r_img, rci);
+
+          // Delete this right image from buffer
+          r_imgs_buffer_.erase(r_imgs_buffer_.begin(), r_imgs_buffer_.begin() + idx_r + 1);
+        } else {
+          // Add the left image to the buffer
+          std::lock_guard<std::mutex> lock(l_sync_mutex_);
+          if (l_imgs_buffer_.size() >= imgs_buffer_size_) {
+            l_imgs_buffer_.erase(l_imgs_buffer_.begin(), l_imgs_buffer_.begin() + 1);
+          }
+          l_imgs_buffer_.push_back(img);
+        }
+      }
     }
   } else {
     std::cout << "[ERROR]: LEFT image incomplete " << std::endl;
@@ -162,9 +211,9 @@ void StereoCamera::leftFrameThread() {
 }
 
 void StereoCamera::rightFrameThread() {
-  std::lock_guard<std::mutex> lock(right_mutex_);
 
   std::cout << "RIGHT THREAD " << right_counter_ << std::endl;
+  ros::Time ros_time = ros::Time::now();
   cv::Mat right_img = r_cam_->GrabNextImage();
 
   if (right_img.rows > 0) {
@@ -172,21 +221,58 @@ void StereoCamera::rightFrameThread() {
       // Setup header
       std_msgs::Header header;
       header.seq = right_counter_;
-      header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
+      header.stamp = ros_time;
 
       // Setup image
-      sensor_msgs::Image img_msg;
+      sensor_msgs::Image img;
       cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, right_img);
-      img_bridge.toImageMsg(img_msg); // from cv_bridge to sensor_msgs::Image
+      img_bridge.toImageMsg(img);
 
       // Camera info
-      sensor_msgs::CameraInfo ci = right_info_man_->getCameraInfo();
-      ci.header.stamp = ros::Time::now();  //r_cam_->GetImageTimestamp();
+      sensor_msgs::CameraInfo rci = right_info_man_->getCameraInfo();
+      rci.header.stamp = ros_time;
+      img.header.frame_id = rci.header.frame_id;
 
-      // Set frame_id
-      img_msg.header.frame_id = ci.header.frame_id;
       // Publish
-      right_pub_.publish(img_msg, ci);
+      if (left_pub_.getNumSubscribers() == 0) {
+        // No right subscribers
+        right_pub_.publish(img, rci);
+      } else {
+        // Left sync
+        std::lock_guard<std::mutex> lock(l_sync_mutex_);
+
+        // Search a time coincidence with left
+        int idx_l = -1;
+        for (uint i=0; i<l_imgs_buffer_.size(); i++) {
+          double l_stamp = l_imgs_buffer_[i].header.stamp.toSec();
+          if (fabs(l_stamp - ros_time.toSec()) < max_sec_diff_) {
+            idx_l = (int)i;
+            break;
+          }
+        }
+        if (idx_l >= 0) {
+          // Get the corresponding left image
+          sensor_msgs::Image l_img = l_imgs_buffer_[idx_l];
+
+          // Publish left/right
+          sensor_msgs::CameraInfo lci = left_info_man_->getCameraInfo();
+          l_img.header.stamp = ros_time;
+          rci.header.stamp = ros_time;
+          lci.header.stamp = ros_time;
+          right_pub_.publish(img, rci);
+          left_pub_.publish(l_img, lci);
+
+          // Delete this left image from buffer
+          l_imgs_buffer_.erase(l_imgs_buffer_.begin(), l_imgs_buffer_.begin() + idx_l + 1);
+        } else {
+          // Add the right image to the buffer
+          std::lock_guard<std::mutex> lock(r_sync_mutex_);
+          if (r_imgs_buffer_.size() >= imgs_buffer_size_) {
+            r_imgs_buffer_.erase(r_imgs_buffer_.begin(), r_imgs_buffer_.begin() + 1);
+          }
+          r_imgs_buffer_.push_back(img);
+        }
+      }
     }
   } else {
     std::cout << "[ERROR]: RIGHT image incomplete " << std::endl;
@@ -252,7 +338,7 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   */
 
   // Select the Exposure End event
-  cam->SetExposureEndEvent();
+  //cam->SetExposureEndEvent();
 }
 
 
