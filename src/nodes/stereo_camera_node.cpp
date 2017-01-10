@@ -10,11 +10,13 @@ int main(int argc, char** argv)
   ros::NodeHandle nhp("~");
 
   pg_spinnaker_camera::StereoCamera sc(nh,nhp);
-  sc.run();
+  std::thread stereo_thread(&pg_spinnaker_camera::StereoCamera::run, &sc);
 
   // ROS spin
-  ros::MultiThreadedSpinner spinner(2); // Use 2 threads
-  spinner.spin(); // spin() will not return until the node has been shut down
+  ros::Rate r(10);
+  while (ros::ok())
+    r.sleep();
+  ros::shutdown();
 
   sc.stop();
   return 0;
