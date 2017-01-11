@@ -300,7 +300,6 @@ void StereoCamera::rightFrameThread() {
 void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
                                    bool is_left) {
   // Image format
-  cam->set("VideoMode", config_.video_mode);
   cam->set("Width", config_.width);
   cam->set("Height", config_.height);
   cam->set("OffsetX", config_.offset_x);
@@ -310,6 +309,7 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("PixelFormat", config_.pixel_format);
   cam->set("PixelSize", config_.pixel_size);
   cam->set("AcquisitionMode", std::string("Continuous"));
+  cam->set("VideoMode", config_.video_mode);
 
   if(is_left) {
     // Set strobe (LEFT CAMERA ONLY)
