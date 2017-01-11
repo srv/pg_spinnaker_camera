@@ -49,10 +49,6 @@
 namespace pg_spinnaker_camera {
 class StereoCameraConfig {
  public:
-  int width;
-  int height;
-  int offset_x;
-  int offset_y;
   int binning_vertical;
   int decimation_vertical;
   std::string pixel_format;

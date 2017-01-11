@@ -51,10 +51,6 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.param("max_sec_diff", max_sec_diff_, 0.05);
 
   // Camera config
-  nhp_.getParam("width", config_.width);
-  nhp_.getParam("height", config_.height);
-  nhp_.getParam("offset_x", config_.offset_x);
-  nhp_.getParam("offset_y", config_.offset_y);
   nhp_.getParam("binning_vertical", config_.binning_vertical);
   nhp_.getParam("decimation_vertical", config_.decimation_vertical);
   nhp_.getParam("pixel_format", config_.pixel_format);
@@ -304,10 +300,6 @@ void StereoCamera::rightFrameThread() {
 void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
                                    bool is_left) {
   // Image format
-  cam->set("Width", config_.width);
-  cam->set("Height", config_.height);
-  cam->set("OffsetX", config_.offset_x);
-  cam->set("OffsetY", config_.offset_y);
   cam->set("BinningVertical", config_.binning_vertical);
   cam->set("DecimationVertical", config_.decimation_vertical);
   cam->set("PixelFormat", config_.pixel_format);
