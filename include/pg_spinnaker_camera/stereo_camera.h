@@ -56,7 +56,6 @@ class StereoCameraConfig {
   int binning_vertical;
   int decimation_vertical;
   std::string pixel_format;
-  std::string pixel_size;
   std::string video_mode;
   std::string line_selector;
   std::string line_mode;
@@ -70,16 +69,18 @@ class StereoCameraConfig {
   std::string exposure_auto;
   float exposure_time;
   float auto_exposure_exposure_time_upper_limit;
-  float gain;
   std::string gain_auto;
+  float gain;
   float auto_gain_lower_limit;
   float auto_gain_upper_limit;
   std::string balance_white_auto;
   float balance_ratio_red;
   float balance_ratio_blue;
   float black_level;
+  bool gamma_enabled;
+  bool hue_enabled;
+  bool saturation_enabled;
   float gamma;
-  float sharpness;
   float hue;
   float saturation;
 };

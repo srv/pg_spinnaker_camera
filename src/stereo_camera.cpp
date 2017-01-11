@@ -58,7 +58,6 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("binning_vertical", config_.binning_vertical);
   nhp_.getParam("decimation_vertical", config_.decimation_vertical);
   nhp_.getParam("pixel_format", config_.pixel_format);
-  nhp_.getParam("pixel_size", config_.pixel_size);
   nhp_.getParam("video_mode", config_.video_mode);
   nhp_.getParam("line_selector", config_.line_selector);
   nhp_.getParam("line_mode", config_.line_mode);
@@ -72,14 +71,16 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("exposure_auto", config_.exposure_auto);
   nhp_.getParam("exposure_time", config_.exposure_time);
   nhp_.getParam("auto_exposure_exposure_time_upper_limit", config_.auto_exposure_exposure_time_upper_limit);
-  nhp_.getParam("gain", config_.gain);
   nhp_.getParam("gain_auto", config_.gain_auto);
+  nhp_.getParam("gain", config_.gain);
   nhp_.getParam("auto_gain_lower_limit", config_.auto_gain_lower_limit);
   nhp_.getParam("auto_gain_upper_limit", config_.auto_gain_upper_limit);
   nhp_.getParam("balance_white_auto", config_.balance_white_auto);
   nhp_.getParam("balance_ratio_red", config_.balance_ratio_red);
   nhp_.getParam("balance_ratio_blue", config_.balance_ratio_blue);
   nhp_.getParam("black_level", config_.black_level);
+  nhp_.getParam("gamma_enabled", config_.gamma_enabled);
+  nhp_.getParam("hue_enabled", config_.hue_enabled);
   nhp_.getParam("gamma", config_.gamma);
   nhp_.getParam("hue", config_.hue);
   nhp_.getParam("saturation", config_.saturation);
@@ -91,7 +92,10 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
     ROS_INFO_STREAM("[pg_spinnaker_camera]: Left camera " << left_serial_number_ << " connected!");
     if (r_cam_->isConnected()) {
       ROS_INFO_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " connected!");
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring LEFT camera -------");
       configureCamera(l_cam_, true);
+      ROS_INFO("\n");
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring RIGHT camera -------");
       configureCamera(r_cam_, false);
     } else {
       ROS_ERROR_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " not connected!");
@@ -307,7 +311,6 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("BinningVertical", config_.binning_vertical);
   cam->set("DecimationVertical", config_.decimation_vertical);
   cam->set("PixelFormat", config_.pixel_format);
-  cam->set("PixelSize", config_.pixel_size);
   cam->set("AcquisitionMode", std::string("Continuous"));
   cam->set("VideoMode", config_.video_mode);
 
@@ -330,29 +333,35 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
     cam->set("TriggerSelector", config_.trigger_selector);
     cam->set("TriggerActivation", config_.trigger_activation);
   }
+
   cam->set("ExposureMode", std::string("Timed"));
-  cam->set("ExposureTime", config_.exposure_time);
-  cam->set("AutoExposureTimeUpperLimit", config_.auto_exposure_exposure_time_upper_limit);
   cam->set("ExposureAuto", config_.exposure_auto);
-  cam->set("Gain", config_.gain);
+  if(config_.exposure_auto.compare(std::string("Off")) == 0) {
+    cam->set("ExposureTime", config_.exposure_time);
+  }
+  cam->set("AutoExposureTimeUpperLimit", config_.auto_exposure_exposure_time_upper_limit);
+
+  cam->set("GainAuto", config_.gain_auto);
+  if(config_.gain_auto.compare(std::string("Off")) == 0) {
+    cam->set("Gain", config_.gain);
+  }
   cam->set("AutoGainLowerLimit", config_.auto_gain_lower_limit);
   cam->set("AutoGainUpperLimit", config_.auto_gain_upper_limit);
-  cam->set("GainAuto", config_.gain_auto);
+
   cam->set("BlackLevel", config_.black_level);
 
-  // cam->set("BlackLevelAuto", config_.black_level_auto);  // Not implemented
-
-  cam->set("Gamma", config_.gamma);
-  cam->set("Hue", config_.hue);
-  cam->set("Saturation", config_.saturation);
-
-  /* No sense if on RAW mode...
-  cam->set("BalanceWhiteAuto", config_.balance_white_auto);
-  cam->set("BalanceRatioSelector", std::string("Red"));
-  cam->set("BalanceRatio", config_.balance_ratio_red);
-  cam->set("BalanceRatioSelector", std::string("Blue"));
-  cam->set("BalanceRatio", config_.balance_ratio_blue);
-  */
+  if (config_.gamma_enabled) {
+    cam->set("GammaEnabled", config_.gamma_enabled);
+    cam->set("Gamma", config_.gamma);
+  }
+  if (config_.hue_enabled) {
+    cam->set("HueEnabled", config_.hue_enabled);
+    cam->set("Hue", config_.hue);
+  }
+  if (config_.saturation_enabled) {
+    cam->set("SaturationEnabled", config_.saturation_enabled);
+    cam->set("Saturation", config_.saturation);
+  }
 }
 
 
