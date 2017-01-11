@@ -227,14 +227,20 @@ public:
 
 	// Start/stop acquisition camera
 	void startAcquisition() {
+		std::lock_guard<std::mutex> lock(mutex_);
 		acquiring_ = true;
 		cam_ptr_->BeginAcquisition();
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition started.");
 	}
 
-	void stopAcquisition() {
+	void stopAcquisition(bool enable_mutex=true) {
 		acquiring_ = false;
-		cam_ptr_->EndAcquisition();
+		if (enable_mutex) {
+			std::lock_guard<std::mutex> lock(mutex_);
+			cam_ptr_->EndAcquisition();
+		} else {
+			cam_ptr_->EndAcquisition();
+		}
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition stop.");
 	}
 
@@ -247,7 +253,7 @@ public:
 
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Camera end called.");
 		try {
-			stopAcquisition();
+			stopAcquisition(false);
       cam_ptr_->DeInit();
       ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") DeInit.");
 		} catch (Spinnaker::Exception &e) {
