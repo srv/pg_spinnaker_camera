@@ -81,7 +81,6 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("balance_ratio_blue", config_.balance_ratio_blue);
   nhp_.getParam("black_level", config_.black_level);
   nhp_.getParam("gamma", config_.gamma);
-  nhp_.getParam("sharpness", config_.sharpness);
   nhp_.getParam("hue", config_.hue);
   nhp_.getParam("saturation", config_.saturation);
 
@@ -331,7 +330,6 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   // cam->set("BlackLevelAuto", config_.black_level_auto);  // Not implemented
 
   cam->set("Gamma", config_.gamma);
-  cam->set("Sharpness", config_.sharpness);
   cam->set("Hue", config_.hue);
   cam->set("Saturation", config_.saturation);
 
