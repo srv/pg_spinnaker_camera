@@ -38,7 +38,7 @@ namespace pg_spinnaker_camera {
 
 StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
 : l_cam_(NULL), r_cam_(NULL), left_counter_(0), right_counter_(0),
-  nh_(nh), nhp_(nhp), it_(nh), l_stop_(true), r_stop_(true) {
+  nh_(nh), nhp_(nhp), it_(nh), exec_stop_(false) {
 
   // Camera info
   nhp_.param("left_serial_number", left_serial_number_, std::string("16401228"));
@@ -87,33 +87,32 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   l_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(left_serial_number_));
   r_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(right_serial_number_));
 
-  if (l_cam_->IsConnected()) {
-    std::cout << "Left camera " << left_serial_number_ << " connected!" << std::endl;
-    if (r_cam_->IsConnected()) {
-      std::cout << "Right camera " << right_serial_number_ << " connected!" << std::endl;
+  if (l_cam_->isConnected()) {
+    ROS_INFO_STREAM("[pg_spinnaker_camera]: Left camera " << left_serial_number_ << " connected!");
+    if (r_cam_->isConnected()) {
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " connected!");
       configureCamera(l_cam_, true);
       configureCamera(r_cam_, false);
     } else {
-      std::cout << "Right camera " << right_serial_number_ << " not connected!" << std::endl;
+      ROS_ERROR_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " not connected!");
     }
   } else {
-    std::cout << "Right camera " << right_serial_number_ << " not connected!" << std::endl;
+    ROS_ERROR_STREAM("[pg_spinnaker_camera]: Left camera " << left_serial_number_ << " not connected!");
   }
 }
 
 void StereoCamera::stop() {
-  l_stop_ = true;
-  r_stop_ = true;
+  exec_stop_ = true;
   if (l_cam_) {
-    l_cam_->End();
+    l_cam_->end();
   }
   if (r_cam_) {
-    r_cam_->End();
+    r_cam_->end();
   }
 }
 
 void StereoCamera::run() {
-  if (!l_cam_->IsConnected() && !r_cam_->IsConnected()) return;
+  if (!l_cam_->isConnected() && !r_cam_->isConnected()) return;
 
   // Set the image publishers before the streaming
   left_pub_  = it_.advertiseCamera("/stereo_forward/left/image_raw",  1);
@@ -127,12 +126,6 @@ void StereoCamera::run() {
     new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),
       "right_optical", right_camera_info_url_));
 
-  // Start camera acquisition
-  l_stop_ = false;
-  r_stop_ = false;
-  l_cam_->Start();
-  r_cam_->Start();
-
   // Start threads
   std::thread thread_left(&StereoCamera::leftFrameThread, this);
   std::thread thread_right(&StereoCamera::rightFrameThread, this);
@@ -142,11 +135,20 @@ void StereoCamera::run() {
 
 void StereoCamera::leftFrameThread() {
 
-  while (!l_stop_) {
+  while (!exec_stop_) {
 
-    std::cout << "LEFT THREAD " << left_counter_ << std::endl;
+    // Start/stop acquisition
+    if (left_pub_.getNumSubscribers() > 0) {
+      if (!l_cam_->isAcquiring())
+        l_cam_->startAcquisition();
+    } else {
+      if (l_cam_->isAcquiring())
+        l_cam_->stopAcquisition();
+      continue;
+    }
+
     ros::Time ros_time = ros::Time::now();
-    cv::Mat left_img = l_cam_->GrabNextImage();
+    cv::Mat left_img = l_cam_->grabNextImage();
 
     if (left_img.rows > 0) {
       if (left_pub_.getNumSubscribers() > 0) {
@@ -207,7 +209,7 @@ void StereoCamera::leftFrameThread() {
         }
       }
     } else {
-      std::cout << "[ERROR]: LEFT image incomplete " << std::endl;
+      ROS_ERROR("[pg_spinnaker_camera]: LEFT image incomplete.");
     }
     left_counter_++;
   }
@@ -215,11 +217,20 @@ void StereoCamera::leftFrameThread() {
 
 void StereoCamera::rightFrameThread() {
 
-  while (!r_stop_) {
+  while (!exec_stop_) {
 
-    std::cout << "RIGHT THREAD " << right_counter_ << std::endl;
+    // Start/stop acquisition
+    if (right_pub_.getNumSubscribers() > 0) {
+      if (!r_cam_->isAcquiring())
+        r_cam_->startAcquisition();
+    } else {
+      if (r_cam_->isAcquiring())
+        r_cam_->stopAcquisition();
+      continue;
+    }
+
     ros::Time ros_time = ros::Time::now();
-    cv::Mat right_img = r_cam_->GrabNextImage();
+    cv::Mat right_img = r_cam_->grabNextImage();
 
     if (right_img.rows > 0) {
       if (right_pub_.getNumSubscribers() > 0) {
@@ -280,7 +291,7 @@ void StereoCamera::rightFrameThread() {
         }
       }
     } else {
-      std::cout << "[ERROR]: RIGHT image incomplete " << std::endl;
+      ROS_ERROR("[pg_spinnaker_camera]: RIGHT image incomplete.");
     }
     right_counter_++;
   }

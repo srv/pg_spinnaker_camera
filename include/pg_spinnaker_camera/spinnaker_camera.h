@@ -22,7 +22,7 @@ enum PixelFormat {
 class SpinnakerCamera {
 public:
 
-	SpinnakerCamera(std::string serial_number) : serial_(serial_number), is_end_(false){
+	SpinnakerCamera(std::string serial_number) : serial_(serial_number), acquiring_(false){
 		system_ = Spinnaker::System::GetInstance();
 		cam_list_ = system_->GetCameras();
 		unsigned int num_cameras = cam_list_.GetSize();
@@ -38,7 +38,7 @@ public:
 
 	~SpinnakerCamera() {
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Destructor called.");
-		if (cam_ptr_) End();
+		if (cam_ptr_) end();
 
 		// Clear camera list before releasing system
 		cam_list_.Clear();
@@ -46,13 +46,13 @@ public:
 		system_->ReleaseInstance();
 	}
 
-	bool IsConnected() {
+	bool isConnected() {
 		if (cam_ptr_) return true;
 		else return false;
 	}
 
 	// Print Device Info
-	void PrintDeviceInfo() {
+	void printDeviceInfo() {
 		if (!cam_ptr_) return;
 		Spinnaker::GenApi::INodeMap &device_node_map = cam_ptr_->GetTLDeviceNodeMap();
 		Spinnaker::GenApi::FeatureList_t features;
@@ -225,21 +225,30 @@ public:
 		return -1;
 	}
 
-	// Start/End camera
-	void Start() {
-		is_end_ = false;
+	// Start/stop acquisition camera
+	void startAcquisition() {
+		acquiring_ = true;
 		set("AcquisitionMode", std::string("Continuous"));
 		cam_ptr_->BeginAcquisition();
+		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition started.");
 	}
 
-	void End() {
+	void stopAcquisition() {
+		acquiring_ = false;
+		cam_ptr_->EndAcquisition();
+		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition stop.");
+	}
+
+	bool isAcquiring() {
+		return acquiring_;
+	}
+
+	void end() {
 		std::lock_guard<std::mutex> lock(mutex_);
-		is_end_ = true;
 
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Camera end called.");
 		try {
-			cam_ptr_->EndAcquisition();
-			ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition stopped.");
+			stopAcquisition();
       cam_ptr_->DeInit();
       ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") DeInit.");
 		} catch (Spinnaker::Exception &e) {
@@ -249,242 +258,19 @@ public:
     delete cam_ptr_;
 	}
 
-	void SetPixelFormat(int format = BAYER_RG8) {
-		switch (format) {
-			case MONO8:
-				set("PixelFormat", std::string("Mono8"));
-				break;
-			case MONO12_PACKED:
-				set("PixelFormat", std::string("Mono12Packed"));
-				break;
-			case MONO16:
-				set("PixelFormat", std::string("Mono16"));
-				break;
-			case RGB8:
-				set("PixelFormat", std::string("RGB8"));
-				break;
-			case BAYER_RG8:
-				set("PixelFormat", std::string("BayerRG8"));
-				break;
-			case BAYER_RG16:
-				set("PixelFormat", std::string("BayerRG16"));
-				break;
-		}
-	}
-
-	void SetImageMode(int format = BAYER_RG8,
-										int width = 0,
-										int height = 0,
-										int binning = 1,
-										int decimation = 1,
-										int offset_x = 0,
-										int offset_y = 0) {
-		this->SetPixelFormat(format);
-		if (width == 0) {
-			setMaxInt("Width");
-		} else {
-			set("Width", width);
-		}
-		if (height == 0) {
-			setMaxInt("Height");
-		} else {
-			set("Height", height);
-		}
-		set("OffsetX", offset_x);
-		set("OffsetY", offset_y);
-		set("BinningVertical", binning);
-		set("DecimationVertical", decimation);
-	}
-
-	void SetReverseX() {
-		set("ReverseX", true);
-	}
-
-	void SetReverseY() {
-		set("ReverseY", true);
-	}
-
-	// Setting Hardware/Software Trigger
-	void EnableHardwareTrigger(int line_number) {
-		set("TriggerMode", std::string("Off"));
-		switch (line_number) {
-			case LINE0:
-				set("TriggerSource", std::string("Line0"));
-				break;
-			case LINE1:
-				set("TriggerSource", std::string("Line1"));
-				break;
-			case LINE2:
-				set("TriggerSource", std::string("Line2"));
-				break;
-	   	case LINE3:
-	   		set("TriggerSource", std::string("Line3"));
-				break;
-			default:
-				ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Unable to set line " << line_number << "!");
-				break;
-		}
-		set("TriggerMode", std::string("On"));
-		set("TriggerSelector", std::string("FrameStart"));
-		set("TriggerActivation", std::string("RisingEdge"));
-	}
-
-	void EnableSoftwareTrigger() {
-		set("TriggerMode", std::string("Off"));
-		set("TriggerSource", std::string("Software"));
-		set("TriggerMode", std::string("On"));
-	}
-
-	void DisableTrigger() {
-		set("TriggerMode", std::string("Off"));
-	}
-
-	void EnableStrobe(int line_number) {
-		switch (line_number) {
-			case LINE0:
-				set("LineSelector", std::string("Line0"));
-				break;
-			case LINE1:
-				set("LineSelector", std::string("Line1"));
-				break;
-			case LINE2:
-				set("LineSelector", std::string("Line2"));
-				break;
-   		case LINE3:
-				set("LineSelector", std::string("Line3"));
-				break;
-			default:
-				ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Unable to set line " << line_number << "!");
-				break;
-		}
-		set("LineMode", std::string("Output"));
-		set("LineSource", std::string("ExposureActive"));
-	}
-
-	// Setting Black Level
-	void EnableBlackLevelAuto() {
-		set("BlackLevelAuto", std::string("Continuous"));
-	}
-
-	void DisableBlackLevelAuto() {
-		set("BlackLevelAuto", std::string("Off"));
-	}
-
-	void SetBlackLevel(float black_level) {
-		set("BlackLevel", black_level);
-	}
-
-	double GetBlackLevel() {
-		return getFloat("BlackLevel");
-	}
-
-	// Setting Frame Rate
-	void EnableFrameRateAuto() {
-		set("AcquisitionFrameRateAuto", std::string("Continuous"));
-	}
-
-	void DisableFrameRateAuto() {
-		set("AcquisitionFrameRateAuto", std::string("Off"));
-	}
-
-	void SetFrameRate(float frame_rate) {
-		set("AcquisitionFrameRate", frame_rate);
-	}
-
-	double GetFrameRate() {
-		return getFloat("AcquisitionFrameRate");
-	}
-
-	// Setting Exposure Time, us
-	void EnableExposureAuto() {
-		set("ExposureAuto", std::string("Continuous"));
-	}
-
-	void DisableExposureAuto() {
-		set("ExposureAuto", std::string("Off"));
-		set("ExposureMode", std::string("Timed"));
-	}
-
-	void SetExposureTime(float exposure_time) {
-		set("ExposureTime", exposure_time);
-	}
-
-	double GetExposureTime() {
-		return getFloat("ExposureTime");
-	}
-
-	void SetExposureUpperbound(float value) {
-		set("AutoExposureExposureTimeUpperLimit", value);
-	}
-
-	// Setting Gain
-	void EnableGainAuto() {
-		set("GainAuto", std::string("Continuous"));
-	}
-
-	void DisableGainAuto() {
-		set("GainAuto", std::string("Off"));
-	}
-
-	void SetGain(float gain) {
-		set("Gain", gain);
-	}
-
-	float GetGain() {
-		return getFloat("Gain");
-	}
-
-	// Setting Gamma
-	void SetGamma(float gamma) {
-		set("Gamma", gamma);
-	}
-
-	float GetGamma() {
-		return getFloat("Gamma");
-	}
-
-	// Setting White Balance
-	void EnableWhiteBalanceAuto() {
-		set("BalanceWhiteAuto", std::string("Continuous"));
-	}
-
-	void DisableWhiteBalanceAuto() {
-		set("BalanceWhiteAuto", std::string("Off"));
-	}
-
-	void SetWhiteBalanceBlue(float value) {
-		set("BalanceRatioSelector", std::string("Blue"));
-		set("BalanceRatio", value);
-	}
-
-	void SetWhiteBalanceRed(float value) {
-		set("BalanceRatioSelector", std::string("Red"));
-		set("BalanceRatio", value);
-	}
-
-	float GetWhiteBalanceBlue() {
-		set("BalanceRatioSelector", std::string("Blue"));
-		return getFloat("BalanceRatio");
-	}
-
-	float GetWhiteBalanceRed() {
-		set("BalanceRatioSelector", std::string("Red"));
-		return getFloat("BalanceRatio");
-	}
-
 	// Get Image Timestamp
-	uint64_t GetSystemTimestamp() const {
+	uint64_t getSystemTimestamp() const {
 		return system_timestamp_;
 	}
 
-	uint64_t GetImageTimestamp() const {
+	uint64_t getImageTimestamp() const {
 		return image_timestamp_;
 	}
 
 	// Grab Next Image
-	cv::Mat GrabNextImage() {
+	cv::Mat grabNextImage() {
 		std::lock_guard<std::mutex> lock(mutex_);
-		if (is_end_) return cv::Mat();
+		if (!acquiring_) return cv::Mat();
 
 		Spinnaker::ImagePtr image_ptr = cam_ptr_->GetNextImage();
 		std::string format(image_ptr->GetPixelFormatName());
@@ -512,10 +298,6 @@ public:
 		return result;
 	}
 
-	void TriggerSoftwareExecute() {
-		execute("TriggerSoftware");
-	}
-
 private:
 	Spinnaker::CameraPtr cam_ptr_;
 	Spinnaker::GenApi::INodeMap *node_map_;
@@ -525,5 +307,5 @@ private:
 	uint64_t image_timestamp_;
 	std::string serial_;
 	std::mutex mutex_;
-	bool is_end_;
+	bool acquiring_;
 };
