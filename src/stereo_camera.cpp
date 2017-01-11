@@ -342,9 +342,6 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("BalanceRatioSelector", std::string("Blue"));
   cam->set("BalanceRatio", config_.balance_ratio_blue);
   */
-
-  // Select the Exposure End event
-  //cam->SetExposureEndEvent();
 }
 
 

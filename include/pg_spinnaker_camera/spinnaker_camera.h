@@ -21,21 +21,7 @@ enum PixelFormat {
 class SpinnakerCamera {
 public:
 
-	// Nested class to hide from implementation
-	class DeviceEventHandler : public Spinnaker::DeviceEvent {
-	 public:
-		DeviceEventHandler(SpinnakerCamera* cam) : cam_(cam) {};
-		~DeviceEventHandler(){};
-		// Once Exposure End Event is detected, the OnDeviceEvent function will be called
-		void OnDeviceEvent(Spinnaker::GenICam::gcstring eventName) {
-			std::thread t(cam_->callback_);
-			t.detach();
-		}
-	 private:
-	 	SpinnakerCamera* cam_;
-	};
-
-	SpinnakerCamera(std::string serial_number) : event_handler_(new DeviceEventHandler(this)), serial_(serial_number), is_end_(false){
+	SpinnakerCamera(std::string serial_number) : serial_(serial_number), is_end_(false){
 		system_ = Spinnaker::System::GetInstance();
 		cam_list_ = system_->GetCameras();
 		unsigned int num_cameras = cam_list_.GetSize();
@@ -44,7 +30,6 @@ public:
 		if (cam_ptr_) {
 			cam_ptr_->Init();
 			node_map_ = &cam_ptr_->GetNodeMap();
-			setCallback(std::bind(&SpinnakerCamera::callback, this));
 		} else {
 			std::cout << "FAILED to open camera " << serial_number << ". Is it connected?" << std::endl;
 		}
@@ -81,7 +66,7 @@ public:
 				std::cout << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Device control information not available." << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Device control information not available." << std::endl;
 		}
 	}
 
@@ -99,7 +84,7 @@ public:
 		// std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
 		Spinnaker::GenApi::CEnumerationPtr enumerationPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(enumerationPtr)) {
-			std::cout << "[ERROR]: (" << serial_ << ")  Enumeration name " << property_name << " not implemented" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration name " << property_name << " not implemented" << std::endl;
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(enumerationPtr)) {
@@ -111,16 +96,16 @@ public:
 						std::cout << "[INFO]: " << property_name << " set to " << enumerationPtr->GetCurrentEntry()->GetSymbolic() << "..." << std::endl;
 						return true;
 					} else {
-						std::cout << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not writable" << std::endl;
+						std::cerr << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not writable" << std::endl;
 					}
 				} else {
-					std::cout << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not available" << std::endl;
+					std::cerr << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not available" << std::endl;
 				}
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not writable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -129,7 +114,7 @@ public:
 		// std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
 		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(floatPtr)) {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
@@ -138,10 +123,10 @@ public:
 				std::cout << "[INFO]: " << property_name << " set to " << floatPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -150,7 +135,7 @@ public:
 		// std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
 		Spinnaker::GenApi::CBooleanPtr boolPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(boolPtr)) {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(boolPtr)) {
@@ -159,10 +144,10 @@ public:
 				std::cout << "[INFO]: " << property_name << " set to " << boolPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -171,7 +156,7 @@ public:
 		// std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(intPtr)) {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
@@ -180,10 +165,10 @@ public:
 				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -197,10 +182,10 @@ public:
 				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
 				return true;
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return false;
 	}
@@ -209,7 +194,7 @@ public:
 		Spinnaker::GenApi::CCommandPtr commandPtr = node_map_->GetNode(command.c_str());
 		if (!Spinnaker::GenApi::IsAvailable(commandPtr) || !Spinnaker::GenApi::IsWritable(commandPtr))
 		{
-			std::cout << "Unable to command " << command << ". Aborting..." << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ") unable to command " << command << ". Aborting..." << std::endl;
 		} else {
 			commandPtr->Execute();
 		}
@@ -221,10 +206,10 @@ public:
 			if (Spinnaker::GenApi::IsReadable(floatPtr)) {
 				return floatPtr->GetValue();
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return -1;
 	}
@@ -235,22 +220,12 @@ public:
 			if (Spinnaker::GenApi::IsReadable(integerPtr)) {
 				return integerPtr->GetValue();
 			} else {
-				std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
 			}
 		} else {
-			std::cout << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
 		}
 		return -1;
-	}
-
-	void SetExposureEndEvent() {
-		// Select the Exposure End event
-		set("EventSelector", std::string("ExposureEnd"));
-		// Turn on the Event notification for Exposure End Event
-		set("EventNotification", std::string("On"));
-
-		// Register event handler
-		cam_ptr_->RegisterEvent(*event_handler_, "EventExposureEnd");
 	}
 
 	// Start/End camera
@@ -265,20 +240,13 @@ public:
 		is_end_ = true;
 
 		std::cout << "[INFO]:  (" << serial_ << ") Camera end called" << std::endl;
-		// Select the Exposure End event
-		//set("EventSelector", std::string("ExposureEnd"));
-		// Turn on the Event notification for Exposure End Event
-		//set("EventNotification", std::string("Off"));
 		try {
-			//cam_ptr_->UnregisterEvent(*event_handler_);
-			//delete event_handler_;
-      std::cout << "[INFO]:  (" << serial_ << ") Device event handler unregistered" << std::endl;
 			cam_ptr_->EndAcquisition();
       std::cout << "[INFO]:  (" << serial_ << ") Acquisition stopped" << std::endl;
       cam_ptr_->DeInit();
       std::cout << "[INFO]:  (" << serial_ << ") DeInit" << std::endl;
 		} catch (Spinnaker::Exception &e) {
-      std::cout << "Error: " << e.what() << std::endl;
+      std::cerr << "[ERROR]: " << e.what() << std::endl;
     }
     delete cam_ptr_;
 	}
@@ -355,7 +323,7 @@ public:
 	   		set("TriggerSource", std::string("Line3"));
 				break;
 			default:
-				std::cout << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
 				break;
 		}
 		set("TriggerMode", std::string("On"));
@@ -388,7 +356,7 @@ public:
 				set("LineSelector", std::string("Line3"));
 				break;
 			default:
-				std::cout << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
+				std::cerr << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
 				break;
 		}
 		set("LineMode", std::string("Output"));
@@ -529,7 +497,7 @@ public:
 
 		cv::Mat result;
 		if (image_ptr->IsIncomplete()) {
-			std::cout << "[ERROR]: (" << serial_ << ")  Received and incomplete image " << std::endl;
+			std::cerr << "[ERROR]: (" << serial_ << ")  Received and incomplete image " << std::endl;
 		} else {
 			int width = image_ptr->GetWidth();
 			int height = image_ptr->GetHeight();
@@ -538,7 +506,7 @@ public:
 				cv::Mat temp_img(height, width, CV_8UC1, image_ptr->GetData());
 				result = temp_img;
 			} else {
-				std::cout << "Invalid image format." << std::endl;
+				std::cerr << "[ERROR]: Invalid image format." << std::endl;
 				//throw std::invalid_argument("Invalid image format = " + format + ". BayerRG8.");
 			}
 		}
@@ -550,21 +518,11 @@ public:
 		execute("TriggerSoftware");
 	}
 
-	void callback() {
-		std::cout << "(" << serial_ << ") This is an empty callback..." << std::endl;
-	}
-
-	void setCallback(std::function<void (void)> f) {
-    callback_ = f;
-  }
-
 private:
 	Spinnaker::CameraPtr cam_ptr_;
 	Spinnaker::GenApi::INodeMap *node_map_;
 	Spinnaker::SystemPtr system_;
 	Spinnaker::CameraList cam_list_;
-	DeviceEventHandler* event_handler_;
-	std::function<void (void)> callback_;
 	uint64_t system_timestamp_;
 	uint64_t image_timestamp_;
 	std::string serial_;
