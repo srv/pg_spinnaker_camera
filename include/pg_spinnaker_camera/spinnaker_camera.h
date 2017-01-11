@@ -228,7 +228,6 @@ public:
 	// Start/stop acquisition camera
 	void startAcquisition() {
 		acquiring_ = true;
-		set("AcquisitionMode", std::string("Continuous"));
 		cam_ptr_->BeginAcquisition();
 		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition started.");
 	}
