@@ -1,5 +1,6 @@
 #include "Spinnaker.h"
 #include "SpinGenApi/SpinnakerGenApi.h"
+#include <ros/ros.h>
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <exception>
@@ -25,18 +26,18 @@ public:
 		system_ = Spinnaker::System::GetInstance();
 		cam_list_ = system_->GetCameras();
 		unsigned int num_cameras = cam_list_.GetSize();
-		std::cout << "Number of cameras detected: " << num_cameras << std::endl << std::endl;
+		ROS_INFO_STREAM("[pg_spinnaker_camera]: Number of cameras detected: " << num_cameras);
 		cam_ptr_ = cam_list_.GetBySerial(serial_number);
 		if (cam_ptr_) {
 			cam_ptr_->Init();
 			node_map_ = &cam_ptr_->GetNodeMap();
 		} else {
-			std::cout << "FAILED to open camera " << serial_number << ". Is it connected?" << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: FAILED to open camera " << serial_number << ". Is it connected?");
 		}
 	}
 
 	~SpinnakerCamera() {
-		std::cout << "[INFO]:  (" << serial_ << ") Destructor called" << std::endl;
+		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Destructor called.");
 		if (cam_ptr_) End();
 
 		// Clear camera list before releasing system
@@ -66,7 +67,7 @@ public:
 				std::cout << std::endl;
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Device control information not available." << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ")  Device control information not available.");
 		}
 	}
 
@@ -84,7 +85,7 @@ public:
 		// std::cout << "Setting " << property_name << " to " << entry_name << " (enum)" << std::endl;
 		Spinnaker::GenApi::CEnumerationPtr enumerationPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(enumerationPtr)) {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration name " << property_name << " not implemented" << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Enumeration name " << property_name << " not implemented.");
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(enumerationPtr)) {
@@ -93,82 +94,79 @@ public:
 				if (Spinnaker::GenApi::IsAvailable(enumEmtryPtr)) {
 					if (Spinnaker::GenApi::IsReadable(enumEmtryPtr)) {
 						enumerationPtr->SetIntValue(enumEmtryPtr->GetValue());
-						std::cout << "[INFO]: " << property_name << " set to " << enumerationPtr->GetCurrentEntry()->GetSymbolic() << "..." << std::endl;
+						ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") " << property_name << " set to " << enumerationPtr->GetCurrentEntry()->GetSymbolic() << ".");
 						return true;
 					} else {
-						std::cerr << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not writable" << std::endl;
+						ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Entry name " << entry_name << " not writable.");
 					}
 				} else {
-					std::cerr << "[ERROR]: (" << serial_ << ")  Entry name " << entry_name << " not available" << std::endl;
+					ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Entry name " << entry_name << " not available.");
 				}
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not writable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Enumeration " << property_name << " not writable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Enumeration " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Enumeration " << property_name << " not available.");
 		}
 		return false;
 	}
 
 	bool set(const std::string &property_name, const float &value) {
-		// std::cout << "Setting " << property_name << " to " << value << " (float)" << std::endl;
 		Spinnaker::GenApi::CFloatPtr floatPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(floatPtr)) {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature name " << property_name << " not implemented.");
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(floatPtr)) {
 			if (Spinnaker::GenApi::IsWritable(floatPtr)) {
 				floatPtr->SetValue(value);
-				std::cout << "[INFO]: " << property_name << " set to " << floatPtr->GetValue() << "..." << std::endl;
+				ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") " << property_name << " set to " << floatPtr->GetValue() << ".");
 				return true;
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not writable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return false;
 	}
 
 	bool set(const std::string &property_name, const bool &value) {
-		// std::cout << "Setting " << property_name << " to " << value << " (bool)" << std::endl;
 		Spinnaker::GenApi::CBooleanPtr boolPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(boolPtr)) {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature name " << property_name << " not implemented.");
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(boolPtr)) {
 			if (Spinnaker::GenApi::IsWritable(boolPtr)) {
 				boolPtr->SetValue(value);
-				std::cout << "[INFO]: " << property_name << " set to " << boolPtr->GetValue() << "..." << std::endl;
+				ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") " << property_name << " set to " << boolPtr->GetValue() << ".");
 				return true;
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not writable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return false;
 	}
 
 	bool set(const std::string &property_name, const int &value) {
-		// std::cout << "Setting " << property_name << " to " << value << " (int)" << std::endl;
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
 		if (!Spinnaker::GenApi::IsImplemented(intPtr)) {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature name " << property_name << " not implemented" << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature name " << property_name << " not implemented.");
 			return false;
 		}
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
 			if (Spinnaker::GenApi::IsWritable(intPtr)) {
 				intPtr->SetValue(value);
-				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
+				ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") " << property_name << " set to " << intPtr->GetValue() << ".");
 				return true;
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not writable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return false;
 	}
@@ -177,15 +175,14 @@ public:
 		Spinnaker::GenApi::CIntegerPtr intPtr = node_map_->GetNode(property_name.c_str());
 		if (Spinnaker::GenApi::IsAvailable(intPtr)) {
 			if (Spinnaker::GenApi::IsWritable(intPtr)) {
-				// std::cout << "Setting " << property_name << " to " << intPtr->GetMax() << " (int)" << std::endl;
 				intPtr->SetValue(intPtr->GetMax());
-				std::cout << "[INFO]: " << property_name << " set to " << intPtr->GetValue() << "..." << std::endl;
+				ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") " << property_name << " set to " << intPtr->GetValue() << ".");
 				return true;
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not writable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not writable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return false;
 	}
@@ -194,7 +191,7 @@ public:
 		Spinnaker::GenApi::CCommandPtr commandPtr = node_map_->GetNode(command.c_str());
 		if (!Spinnaker::GenApi::IsAvailable(commandPtr) || !Spinnaker::GenApi::IsWritable(commandPtr))
 		{
-			std::cerr << "[ERROR]: (" << serial_ << ") unable to command " << command << ". Aborting..." << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") unable to command " << command << ". Aborting...");
 		} else {
 			commandPtr->Execute();
 		}
@@ -206,10 +203,10 @@ public:
 			if (Spinnaker::GenApi::IsReadable(floatPtr)) {
 				return floatPtr->GetValue();
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not readable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return -1;
 	}
@@ -220,10 +217,10 @@ public:
 			if (Spinnaker::GenApi::IsReadable(integerPtr)) {
 				return integerPtr->GetValue();
 			} else {
-				std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not readable" << std::endl;
+				ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not readable.");
 			}
 		} else {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Feature " << property_name << " not available" << std::endl;
+			ROS_WARN_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Feature " << property_name << " not available.");
 		}
 		return -1;
 	}
@@ -239,14 +236,15 @@ public:
 		std::lock_guard<std::mutex> lock(mutex_);
 		is_end_ = true;
 
-		std::cout << "[INFO]:  (" << serial_ << ") Camera end called" << std::endl;
+		ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Camera end called.");
 		try {
 			cam_ptr_->EndAcquisition();
-      std::cout << "[INFO]:  (" << serial_ << ") Acquisition stopped" << std::endl;
+			ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Acquisition stopped.");
       cam_ptr_->DeInit();
-      std::cout << "[INFO]:  (" << serial_ << ") DeInit" << std::endl;
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") DeInit.");
 		} catch (Spinnaker::Exception &e) {
       std::cerr << "[ERROR]: " << e.what() << std::endl;
+      ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ")" << e.what());
     }
     delete cam_ptr_;
 	}
@@ -323,7 +321,7 @@ public:
 	   		set("TriggerSource", std::string("Line3"));
 				break;
 			default:
-				std::cerr << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
+				ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Unable to set line " << line_number << "!");
 				break;
 		}
 		set("TriggerMode", std::string("On"));
@@ -356,7 +354,7 @@ public:
 				set("LineSelector", std::string("Line3"));
 				break;
 			default:
-				std::cerr << "[ERROR]: (" << serial_ << ") Unable to set line " << line_number << "!" << std::endl;
+				ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Unable to set line " << line_number << "!");
 				break;
 		}
 		set("LineMode", std::string("Output"));
@@ -497,7 +495,7 @@ public:
 
 		cv::Mat result;
 		if (image_ptr->IsIncomplete()) {
-			std::cerr << "[ERROR]: (" << serial_ << ")  Received and incomplete image " << std::endl;
+			ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Received and incomplete image.");
 		} else {
 			int width = image_ptr->GetWidth();
 			int height = image_ptr->GetHeight();
@@ -506,7 +504,7 @@ public:
 				cv::Mat temp_img(height, width, CV_8UC1, image_ptr->GetData());
 				result = temp_img;
 			} else {
-				std::cerr << "[ERROR]: Invalid image format." << std::endl;
+				ROS_ERROR_STREAM("[pg_spinnaker_camera]: (" << serial_ << ") Invalid image format.");
 				//throw std::invalid_argument("Invalid image format = " + format + ". BayerRG8.");
 			}
 		}
