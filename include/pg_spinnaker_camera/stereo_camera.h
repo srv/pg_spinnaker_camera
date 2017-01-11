@@ -129,6 +129,10 @@ class StereoCamera {
   std::mutex r_sync_mutex_;
   double max_sec_diff_;
 
+  // Stop handlers
+  bool l_stop_;
+  bool r_stop_;
+
   void leftFrameThread();
   void rightFrameThread();
 

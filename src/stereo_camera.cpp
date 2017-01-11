@@ -38,7 +38,7 @@ namespace pg_spinnaker_camera {
 
 StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
 : l_cam_(NULL), r_cam_(NULL), left_counter_(0), right_counter_(0),
-  nh_(nh), nhp_(nhp), it_(nh) {
+  nh_(nh), nhp_(nhp), it_(nh), l_stop_(true), r_stop_(true) {
 
   // Camera info
   nhp_.param("left_serial_number", left_serial_number_, std::string("16401228"));
@@ -102,6 +102,8 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
 }
 
 void StereoCamera::stop() {
+  l_stop_ = true;
+  r_stop_ = true;
   if (l_cam_) {
     l_cam_->End();
   }
@@ -112,23 +114,22 @@ void StereoCamera::stop() {
 
 void StereoCamera::run() {
   if (!l_cam_->IsConnected() && !r_cam_->IsConnected()) return;
-  // End camera acquisition just in case...
-  //l_cam_->End();
-  //r_cam_->End();
 
   // Set the image publishers before the streaming
   left_pub_  = it_.advertiseCamera("/stereo_forward/left/image_raw",  1);
   right_pub_ = it_.advertiseCamera("/stereo_forward/right/image_raw", 1);
 
   // Set camera info managers
-  left_info_man_  = std::shared_ptr<camera_info_manager::CameraInfoManager>(new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "left"),"left_optical", left_camera_info_url_));
-  right_info_man_ = std::shared_ptr<camera_info_manager::CameraInfoManager>(new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),"right_optical", right_camera_info_url_));
-
-  // Bind the callbacks with the cameras
-  //l_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::leftFrameThread, this));
-  //r_cam_->setCallback(std::bind(&pg_spinnaker_camera::StereoCamera::rightFrameThread, this));
+  left_info_man_  = std::shared_ptr<camera_info_manager::CameraInfoManager>(
+    new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "left"),
+      "left_optical", left_camera_info_url_));
+  right_info_man_ = std::shared_ptr<camera_info_manager::CameraInfoManager>(
+    new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),
+      "right_optical", right_camera_info_url_));
 
   // Start camera acquisition
+  l_stop_ = false;
+  r_stop_ = false;
   l_cam_->Start();
   r_cam_->Start();
 
@@ -141,7 +142,7 @@ void StereoCamera::run() {
 
 void StereoCamera::leftFrameThread() {
 
-  while (ros::ok()) {
+  while (!l_stop_) {
 
     std::cout << "LEFT THREAD " << left_counter_ << std::endl;
     ros::Time ros_time = ros::Time::now();
@@ -214,7 +215,7 @@ void StereoCamera::leftFrameThread() {
 
 void StereoCamera::rightFrameThread() {
 
-  while (ros::ok()) {
+  while (!r_stop_) {
 
     std::cout << "RIGHT THREAD " << right_counter_ << std::endl;
     ros::Time ros_time = ros::Time::now();
