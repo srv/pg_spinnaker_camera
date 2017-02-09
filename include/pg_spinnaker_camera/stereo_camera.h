@@ -79,6 +79,8 @@ class StereoCameraConfig {
   float gamma;
   float hue;
   float saturation;
+  bool flip_left;
+  bool flip_right;
 };
 
 class StereoCamera {

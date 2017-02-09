@@ -39,10 +39,11 @@ namespace pg_spinnaker_camera {
 StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
 : l_cam_(NULL), r_cam_(NULL), left_counter_(0), right_counter_(0),
   nh_(nh), nhp_(nhp), it_(nh), exec_stop_(false) {
-
   // Camera info
-  nhp_.param("left_serial_number", left_serial_number_, std::string("16401228"));
-  nhp_.param("right_serial_number", right_serial_number_, std::string("16401229"));
+  nhp_.param("left_serial_number", left_serial_number_,
+    std::string("16401228"));
+  nhp_.param("right_serial_number", right_serial_number_,
+    std::string("16401229"));
   nhp_.param("left_camera_info_url", left_camera_info_url_, std::string(""));
   nhp_.param("right_camera_info_url", right_camera_info_url_, std::string(""));
 
@@ -61,12 +62,15 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("trigger_source", config_.trigger_source);
   nhp_.getParam("trigger_selector", config_.trigger_selector);
   nhp_.getParam("trigger_activation", config_.trigger_activation);
-  nhp_.getParam("acquisition_frame_rate_auto", config_.acquisition_frame_rate_auto);
-  nhp_.getParam("acquisition_frame_rate_enabled", config_.acquisition_frame_rate_enabled);
+  nhp_.getParam("acquisition_frame_rate_auto",
+    config_.acquisition_frame_rate_auto);
+  nhp_.getParam("acquisition_frame_rate_enabled",
+    config_.acquisition_frame_rate_enabled);
   nhp_.getParam("acquisition_frame_rate", config_.acquisition_frame_rate);
   nhp_.getParam("exposure_auto", config_.exposure_auto);
   nhp_.getParam("exposure_time", config_.exposure_time);
-  nhp_.getParam("auto_exposure_exposure_time_upper_limit", config_.auto_exposure_exposure_time_upper_limit);
+  nhp_.getParam("auto_exposure_exposure_time_upper_limit",
+    config_.auto_exposure_exposure_time_upper_limit);
   nhp_.getParam("gain_auto", config_.gain_auto);
   nhp_.getParam("gain", config_.gain);
   nhp_.getParam("auto_gain_lower_limit", config_.auto_gain_lower_limit);
@@ -80,24 +84,34 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.getParam("gamma", config_.gamma);
   nhp_.getParam("hue", config_.hue);
   nhp_.getParam("saturation", config_.saturation);
+  nhp_.getParam("flip_left", config_.flip_left);
+  nhp_.getParam("flip_right", config_.flip_right);
 
-  l_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(left_serial_number_));
-  r_cam_ = std::shared_ptr<SpinnakerCamera>(new SpinnakerCamera(right_serial_number_));
+  l_cam_ = std::shared_ptr<SpinnakerCamera>(
+    new SpinnakerCamera(left_serial_number_));
+  r_cam_ = std::shared_ptr<SpinnakerCamera>(
+    new SpinnakerCamera(right_serial_number_));
 
   if (l_cam_->isConnected()) {
-    ROS_INFO_STREAM("[pg_spinnaker_camera]: Left camera " << left_serial_number_ << " connected!");
+    ROS_INFO_STREAM("[pg_spinnaker_camera]: Left camera " <<
+      left_serial_number_ << " connected!");
     if (r_cam_->isConnected()) {
-      ROS_INFO_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " connected!");
-      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring LEFT camera -------");
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: Right camera " <<
+        right_serial_number_ << " connected!");
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring " <<
+        " LEFT camera -------");
       configureCamera(l_cam_, true);
       ROS_INFO("\n");
-      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring RIGHT camera -------");
+      ROS_INFO_STREAM("[pg_spinnaker_camera]: ------- Configuring " <<
+        " RIGHT camera -------");
       configureCamera(r_cam_, false);
     } else {
-      ROS_ERROR_STREAM("[pg_spinnaker_camera]: Right camera " << right_serial_number_ << " not connected!");
+      ROS_ERROR_STREAM("[pg_spinnaker_camera]: Right camera " <<
+        right_serial_number_ << " not connected!");
     }
   } else {
-    ROS_ERROR_STREAM("[pg_spinnaker_camera]: Left camera " << left_serial_number_ << " not connected!");
+    ROS_ERROR_STREAM("[pg_spinnaker_camera]: Left camera " <<
+      left_serial_number_ << " not connected!");
   }
 }
 
@@ -134,9 +148,7 @@ void StereoCamera::run() {
 }
 
 void StereoCamera::leftFrameThread() {
-
   while (!exec_stop_) {
-
     // Start/stop acquisition
     if (left_pub_.getNumSubscribers() > 0) {
       if (!l_cam_->isAcquiring())
@@ -157,9 +169,17 @@ void StereoCamera::leftFrameThread() {
         header.seq = left_counter_;
         header.stamp = ros_time;
 
+        // Flip?
+        std::string enc = sensor_msgs::image_encodings::BAYER_RGGB8;
+        if (config_.flip_left) {
+          cv::flip(left_img, left_img, -1);
+          enc = sensor_msgs::image_encodings::BAYER_BGGR8;
+        }
+
         // Setup image
         sensor_msgs::Image img;
-        cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, left_img);
+        cv_bridge::CvImage img_bridge =
+          cv_bridge::CvImage(header, enc, left_img);
         img_bridge.toImageMsg(img);
 
         // Camera info
@@ -177,10 +197,10 @@ void StereoCamera::leftFrameThread() {
 
           // Search a time coincidence with right
           int idx_r = -1;
-          for (uint i=0; i<r_imgs_buffer_.size(); i++) {
+          for (uint i=0; i < r_imgs_buffer_.size(); i++) {
             double r_stamp = r_imgs_buffer_[i].header.stamp.toSec();
             if (fabs(r_stamp - ros_time.toSec()) < max_sec_diff_) {
-              idx_r = (int)i;
+              idx_r = static_cast<int>(i);
               break;
             }
           }
@@ -197,12 +217,14 @@ void StereoCamera::leftFrameThread() {
             right_pub_.publish(r_img, rci);
 
             // Delete this right image from buffer
-            r_imgs_buffer_.erase(r_imgs_buffer_.begin(), r_imgs_buffer_.begin() + idx_r + 1);
+            r_imgs_buffer_.erase(r_imgs_buffer_.begin(),
+              r_imgs_buffer_.begin() + idx_r + 1);
           } else {
             // Add the left image to the buffer
             std::lock_guard<std::mutex> lock(l_sync_mutex_);
             if (l_imgs_buffer_.size() >= imgs_buffer_size_) {
-              l_imgs_buffer_.erase(l_imgs_buffer_.begin(), l_imgs_buffer_.begin() + 1);
+              l_imgs_buffer_.erase(l_imgs_buffer_.begin(),
+                l_imgs_buffer_.begin() + 1);
             }
             l_imgs_buffer_.push_back(img);
           }
@@ -216,9 +238,7 @@ void StereoCamera::leftFrameThread() {
 }
 
 void StereoCamera::rightFrameThread() {
-
   while (!exec_stop_) {
-
     // Start/stop acquisition
     if (right_pub_.getNumSubscribers() > 0) {
       if (!r_cam_->isAcquiring())
@@ -239,9 +259,17 @@ void StereoCamera::rightFrameThread() {
         header.seq = right_counter_;
         header.stamp = ros_time;
 
+        // Flip?
+        std::string enc = sensor_msgs::image_encodings::BAYER_RGGB8;
+        if (config_.flip_right) {
+          cv::flip(right_img, right_img, -1);
+          enc = sensor_msgs::image_encodings::BAYER_BGGR8;
+        }
+
         // Setup image
         sensor_msgs::Image img;
-        cv_bridge::CvImage img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BAYER_RGGB8, right_img);
+        cv_bridge::CvImage img_bridge =
+          cv_bridge::CvImage(header, enc, right_img);
         img_bridge.toImageMsg(img);
 
         // Camera info
@@ -259,10 +287,10 @@ void StereoCamera::rightFrameThread() {
 
           // Search a time coincidence with left
           int idx_l = -1;
-          for (uint i=0; i<l_imgs_buffer_.size(); i++) {
+          for (uint i=0; i < l_imgs_buffer_.size(); i++) {
             double l_stamp = l_imgs_buffer_[i].header.stamp.toSec();
             if (fabs(l_stamp - ros_time.toSec()) < max_sec_diff_) {
-              idx_l = (int)i;
+              idx_l = static_cast<int>(i);
               break;
             }
           }
@@ -279,12 +307,14 @@ void StereoCamera::rightFrameThread() {
             left_pub_.publish(l_img, lci);
 
             // Delete this left image from buffer
-            l_imgs_buffer_.erase(l_imgs_buffer_.begin(), l_imgs_buffer_.begin() + idx_l + 1);
+            l_imgs_buffer_.erase(l_imgs_buffer_.begin(),
+              l_imgs_buffer_.begin() + idx_l + 1);
           } else {
             // Add the right image to the buffer
             std::lock_guard<std::mutex> lock(r_sync_mutex_);
             if (r_imgs_buffer_.size() >= imgs_buffer_size_) {
-              r_imgs_buffer_.erase(r_imgs_buffer_.begin(), r_imgs_buffer_.begin() + 1);
+              r_imgs_buffer_.erase(r_imgs_buffer_.begin(),
+                r_imgs_buffer_.begin() + 1);
             }
             r_imgs_buffer_.push_back(img);
           }
@@ -306,7 +336,7 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
   cam->set("AcquisitionMode", std::string("Continuous"));
   cam->set("VideoMode", config_.video_mode);
 
-  if(is_left) {
+  if (is_left) {
     // Set strobe (LEFT CAMERA ONLY)
     // and AcquisitionFrameRate (only if Trigger Mode is Off)
     cam->set("LineSelector", config_.line_selector);
@@ -314,7 +344,8 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
     cam->set("LineSource", config_.line_source);
     cam->set("TriggerMode", std::string("Off"));
     cam->set("AcquisitionFrameRateAuto", config_.acquisition_frame_rate_auto);
-    cam->set("AcquisitionFrameRateEnabled", config_.acquisition_frame_rate_enabled);
+    cam->set("AcquisitionFrameRateEnabled",
+      config_.acquisition_frame_rate_enabled);
     cam->set("AcquisitionFrameRate", config_.acquisition_frame_rate);
   } else {
     // Trigger (Must be switched off to change source!)
@@ -328,13 +359,14 @@ void StereoCamera::configureCamera(const std::shared_ptr<SpinnakerCamera>& cam,
 
   cam->set("ExposureMode", std::string("Timed"));
   cam->set("ExposureAuto", config_.exposure_auto);
-  if(config_.exposure_auto.compare(std::string("Off")) == 0) {
+  if (config_.exposure_auto.compare(std::string("Off")) == 0) {
     cam->set("ExposureTime", config_.exposure_time);
   }
-  cam->set("AutoExposureTimeUpperLimit", config_.auto_exposure_exposure_time_upper_limit);
+  cam->set("AutoExposureTimeUpperLimit",
+    config_.auto_exposure_exposure_time_upper_limit);
 
   cam->set("GainAuto", config_.gain_auto);
-  if(config_.gain_auto.compare(std::string("Off")) == 0) {
+  if (config_.gain_auto.compare(std::string("Off")) == 0) {
     cam->set("Gain", config_.gain);
   }
   cam->set("AutoGainLowerLimit", config_.auto_gain_lower_limit);
