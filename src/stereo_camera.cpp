@@ -196,8 +196,8 @@ void StereoCamera::leftFrameThread() {
         // ROI in CameraInfo is in unbinned coordinates, need to scale up
         lci.roi.x_offset = 0;
         lci.roi.y_offset = 0;
-        lci.roi.height = 1536; // FIXME: read from parameter file
-        lci.roi.width = 2048; // FIXME: read from parameter file
+        lci.roi.height = 768; // FIXME: read from parameter file
+        lci.roi.width = 1024; // FIXME: read from parameter file
         lci.roi.do_rectify = false;
 
         // Set frame id
@@ -296,8 +296,8 @@ void StereoCamera::rightFrameThread() {
         // ROI in CameraInfo is in unbinned coordinates, need to scale up
         rci.roi.x_offset = 0;
         rci.roi.y_offset = 0;
-        rci.roi.height = 1536; // FIXME: read from parameter file
-        rci.roi.width = 2048; // FIXME: read from parameter file
+        rci.roi.height = 768; // FIXME: read from parameter file
+        rci.roi.width = 1024; // FIXME: read from parameter file
         rci.roi.do_rectify = false;
 
         // Set frame id
