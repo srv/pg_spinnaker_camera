@@ -140,6 +140,12 @@ void StereoCamera::run() {
     new camera_info_manager::CameraInfoManager(ros::NodeHandle(nhp_, "right"),
       "right_optical", right_camera_info_url_));
 
+  // Start acquisition
+  if (!l_cam_->isAcquiring())
+    l_cam_->startAcquisition();
+  if (!r_cam_->isAcquiring())
+    r_cam_->startAcquisition();
+
   // Start threads
   std::thread thread_left(&StereoCamera::leftFrameThread, this);
   std::thread thread_right(&StereoCamera::rightFrameThread, this);
@@ -149,13 +155,8 @@ void StereoCamera::run() {
 
 void StereoCamera::leftFrameThread() {
   while (!exec_stop_) {
-    // Start/stop acquisition
-    if (left_pub_.getNumSubscribers() > 0) {
-      if (!l_cam_->isAcquiring())
-        l_cam_->startAcquisition();
-    } else {
-      if (l_cam_->isAcquiring())
-        l_cam_->stopAcquisition();
+    // Process only when subscriptors
+    if (left_pub_.getNumSubscribers() == 0) {
       continue;
     }
 
@@ -239,13 +240,8 @@ void StereoCamera::leftFrameThread() {
 
 void StereoCamera::rightFrameThread() {
   while (!exec_stop_) {
-    // Start/stop acquisition
-    if (right_pub_.getNumSubscribers() > 0) {
-      if (!r_cam_->isAcquiring())
-        r_cam_->startAcquisition();
-    } else {
-      if (r_cam_->isAcquiring())
-        r_cam_->stopAcquisition();
+    // Process only when subscriptors
+    if (right_pub_.getNumSubscribers() == 0) {
       continue;
     }
 
