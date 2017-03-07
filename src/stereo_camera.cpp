@@ -186,6 +186,21 @@ void StereoCamera::leftFrameThread() {
         // Camera info
         sensor_msgs::CameraInfo lci = left_info_man_->getCameraInfo();
         lci.header.stamp = ros_time;
+
+        // Adjust full-res ROI to binning ROI
+        int bin_dec = std::max(config_.binning_vertical, config_.decimation_vertical);
+
+        // Set the operational parameters in CameraInfo (binning, ROI)
+        lci.binning_x = bin_dec;
+        lci.binning_y = bin_dec;
+        // ROI in CameraInfo is in unbinned coordinates, need to scale up
+        lci.roi.x_offset = 0;
+        lci.roi.y_offset = 0;
+        lci.roi.height = 1536; // FIXME: read from parameter file
+        lci.roi.width = 2048; // FIXME: read from parameter file
+        lci.roi.do_rectify = false;
+
+        // Set frame id
         img.header.frame_id = lci.header.frame_id;
 
         // Publish
@@ -271,6 +286,21 @@ void StereoCamera::rightFrameThread() {
         // Camera info
         sensor_msgs::CameraInfo rci = right_info_man_->getCameraInfo();
         rci.header.stamp = ros_time;
+
+        // Adjust full-res ROI to binning ROI
+        int bin_dec = std::max(config_.binning_vertical, config_.decimation_vertical);
+
+        // Set the operational parameters in CameraInfo (binning, ROI)
+        rci.binning_x = bin_dec;
+        rci.binning_y = bin_dec;
+        // ROI in CameraInfo is in unbinned coordinates, need to scale up
+        rci.roi.x_offset = 0;
+        rci.roi.y_offset = 0;
+        rci.roi.height = 1536; // FIXME: read from parameter file
+        rci.roi.width = 2048; // FIXME: read from parameter file
+        rci.roi.do_rectify = false;
+
+        // Set frame id
         img.header.frame_id = rci.header.frame_id;
 
         // Publish
