@@ -100,6 +100,8 @@ class StereoCamera {
   std::string right_serial_number_;
   std::string left_camera_info_url_;
   std::string right_camera_info_url_;
+  std::string left_frame_id_;
+  std::string right_frame_id_;
   StereoCameraConfig config_;
 
   // Publish counters

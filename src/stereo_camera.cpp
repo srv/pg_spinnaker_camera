@@ -47,6 +47,9 @@ StereoCamera::StereoCamera(ros::NodeHandle nh, ros::NodeHandle nhp)
   nhp_.param("left_camera_info_url", left_camera_info_url_, std::string(""));
   nhp_.param("right_camera_info_url", right_camera_info_url_, std::string(""));
 
+  nhp_.param("left_frame_id", left_frame_id_, std::string(""));
+  nhp_.param("right_frame_id", right_frame_id_, std::string(""));
+
   // Sync
   nhp_.param("imgs_buffer_size", imgs_buffer_size_, 2);
   nhp_.param("max_sec_diff", max_sec_diff_, 0.05);
@@ -201,6 +204,7 @@ void StereoCamera::leftFrameThread() {
         lci.roi.do_rectify = false;
 
         // Set frame id
+        lci.header.frame_id = left_frame_id_;
         img.header.frame_id = lci.header.frame_id;
 
         // Publish
@@ -301,6 +305,7 @@ void StereoCamera::rightFrameThread() {
         rci.roi.do_rectify = false;
 
         // Set frame id
+        rci.header.frame_id = right_frame_id_;
         img.header.frame_id = rci.header.frame_id;
 
         // Publish
