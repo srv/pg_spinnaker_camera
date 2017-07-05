@@ -81,7 +81,7 @@ if not os.path.exists(os.path.join(os.getcwd(), "usr/lib/")):
             shutil.move(os.path.join(os.getcwd(), folder_name, filename), os.path.join(os.getcwd(), "usr/", filename))
 
     # now we do some thing for XML files; copy them next to the catkin binary
-    xml_path = os.path.join(os.getcwd(), "usr/bin")
+    xml_path = os.path.join(os.getcwd(), "usr/bin/")
     xml_files = os.listdir(xml_path)
 
     for files in xml_files:
